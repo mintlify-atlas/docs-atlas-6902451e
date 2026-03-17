@@ -268,7 +268,7 @@ Arena allocation improves performance by reducing heap fragmentation. All messag
 
 google::protobuf::Arena arena;
 tutorial::AddressBook* address_book =
-    google::protobuf::Arena::CreateMessage<tutorial::AddressBook>(&arena);
+    google::protobuf::Arena::Create<tutorial::AddressBook>(&arena);
 
 tutorial::Person* person = address_book->add_people();
 person->set_name("Arena User");
@@ -293,7 +293,7 @@ person->set_id(1);
     `SerializeToArray` / `ParseFromArray` — raw buffer I/O.
   </Card>
   <Card title="Arena" icon="memory">
-    `google::protobuf::Arena` — arena allocator. Use `Arena::CreateMessage<T>(&arena)` to allocate messages on the arena.
+    `google::protobuf::Arena` — arena allocator. Use `Arena::Create<T>(&arena)` to allocate messages on the arena.
   </Card>
   <Card title="Utilities" icon="wrench">
     `google::protobuf::util::TimeUtil` — helpers for `Timestamp` and `Duration` well-known types.
