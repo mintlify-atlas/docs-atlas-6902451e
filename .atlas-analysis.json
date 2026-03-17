@@ -1,0 +1,131 @@
+{
+  "projectType": "sdk-library",
+  "projectName": "Protocol Buffers",
+  "projectDescription": "Protocol Buffers (protobuf) is Google's language-neutral, platform-neutral, extensible mechanism for serializing structured data, with runtimes for C++, Java, Python, C#, Go, Ruby, PHP, Rust, Objective-C, and more.",
+  "theme": "linden",
+  "primaryColor": "#d85030",
+  "lightColor": "#2c3538",
+  "darkColor": "#d1c2c1",
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/proto-syntax",
+              "concepts/proto3",
+              "concepts/encoding",
+              "concepts/field-types",
+              "concepts/well-known-types"
+            ]
+          },
+          {
+            "group": "Language Guides",
+            "pages": [
+              "languages/cpp",
+              "languages/java",
+              "languages/python",
+              "languages/csharp",
+              "languages/go",
+              "languages/ruby",
+              "languages/php",
+              "languages/rust",
+              "languages/objectivec"
+            ]
+          },
+          {
+            "group": "Advanced Topics",
+            "pages": [
+              "advanced/editions",
+              "advanced/custom-options",
+              "advanced/extensions",
+              "advanced/arena-allocation",
+              "advanced/field-presence",
+              "advanced/reflection"
+            ]
+          },
+          {
+            "group": "Tooling",
+            "pages": [
+              "tooling/protoc",
+              "tooling/plugins",
+              "tooling/bazel",
+              "tooling/cmake"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "reference/proto3-spec",
+              "reference/encoding",
+              "reference/well-known-types-ref",
+              "reference/extension-registry"
+            ]
+          },
+          {
+            "group": "Resources",
+            "pages": [
+              "resources/examples",
+              "resources/third-party",
+              "resources/version-support",
+              "resources/contributing"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "keyFeatures": [
+    "Language-neutral binary serialization format with compact, fast encoding",
+    "Multi-language runtime support: C++, Java, Python, C#, Go, Ruby, PHP, Rust, Objective-C",
+    "Schema-first development with .proto IDL files compiled by protoc",
+    "Forward and backward compatibility with schema evolution",
+    "Protocol Buffers Editions system for fine-grained feature control",
+    "Arena memory allocation for high-performance C++ usage",
+    "Well-known types for common data structures (Timestamp, Duration, Struct, etc.)",
+    "gRPC integration for RPC service definitions",
+    "Plugin architecture for extending protoc code generation",
+    "Bazel and CMake build system support"
+  ],
+  "publicApiSurface": [
+    "message (proto3 message definition keyword)",
+    "syntax = 'proto3' (proto file declaration)",
+    "google.protobuf.Any",
+    "google.protobuf.Timestamp",
+    "google.protobuf.Duration",
+    "google.protobuf.Struct",
+    "google.protobuf.FieldMask",
+    "google.protobuf.Empty",
+    "google.protobuf.Wrappers",
+    "protoc (Protocol Buffer compiler CLI)",
+    "protoc --cpp_out (C++ code generator)",
+    "protoc --java_out (Java code generator)",
+    "protoc --python_out (Python code generator)",
+    "protoc --csharp_out (C# code generator)",
+    "protoc --ruby_out (Ruby code generator)",
+    "protoc --php_out (PHP code generator)",
+    "google::protobuf::Message (C++ base class)",
+    "google::protobuf::MessageLite (C++ lite base class)",
+    "google::protobuf::Arena (C++ arena allocator)",
+    "google::protobuf::Descriptor (C++ descriptor API)",
+    "google::protobuf::DynamicMessage (C++ dynamic messages)",
+    "google::protobuf::TextFormat (C++ text format API)",
+    "google::protobuf::util::JsonUtil (C++ JSON conversion)",
+    "com.google.protobuf.Message (Java interface)",
+    "com.google.protobuf.GeneratedMessage (Java base class)",
+    "com.google.protobuf.Descriptors (Java descriptor API)",
+    "google.protobuf.Message (Python class)",
+    "Google.Protobuf.IMessage (C# interface)",
+    "descriptor.proto (descriptor schema definition)"
+  ]
+}
