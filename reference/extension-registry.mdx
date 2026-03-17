@@ -1,0 +1,110 @@
+---
+title: Extension registry
+description: The global Protocol Buffers extension registry for custom options, how to look up registered extension numbers, and how to request a new extension number.
+---
+
+Protocol Buffers allows you to define [custom options](/advanced/custom-options) by extending descriptor messages such as `google.protobuf.FieldOptions` or `google.protobuf.MessageOptions`. To avoid collisions between independent projects that define custom options, protobuf maintains a global extension registry.
+
+## What is the extension registry?
+
+The extension registry is a public, authoritative list of extension number assignments for `descriptor.proto` options. Each entry records the project name, its website, and the extension number (or range) assigned to it.
+
+If you publish a project that uses custom options and your `.proto` files may be used alongside other third-party `.proto` files, you should register your extension number to prevent collisions.
+
+<Info>
+The registry only covers extensions to the descriptor options messages (e.g., `FileOptions`, `MessageOptions`, `FieldOptions`, `EnumOptions`, `ServiceOptions`, `MethodOptions`). It does not cover field extensions in your own custom messages.
+</Info>
+
+## Registered extension numbers
+
+The following table shows the first 20 registered entries from the [global registry](https://github.com/protocolbuffers/protobuf/blob/main/docs/options.md):
+
+| # | Project | Extension number(s) |
+|---|---------|--------------------|
+| 1 | C# port of protocol buffers | 1000 |
+| 2 | Perl/XS port of protocol buffers | 1001 |
+| 3 | Objective-C port of protocol buffers | 1002 |
+| 4 | Google Wave Federation Protocol (FedOne) | 1003 |
+| 5 | PHP code generator plugin | 1004 |
+| 6 | GWT code generator plugin | 1005 |
+| 7 | Unix Domain RPC code generator plugin | 1006 |
+| 8 | Objective-C generator plugin (Plausible Labs) | 1007 |
+| 9 | TBD (code42.com) | 1008 |
+| 10 | Goby Underwater Autonomy Project | 1009 |
+| 11 | Nanopb | 1010 |
+| 12 | Bluefin AUV Communication Extensions | 1011 |
+| 13 | Dynamic Compact Control Language (DCCL) | 1012 |
+| 14 | ScaleOut StateServer Native C++ API | 1013 |
+| 15 | FoundationDB SQL Layer | 1014 |
+| 16 | Fender | 1015 |
+| 17 | Vortex | 1016 |
+| 18 | tresorit | 1017 |
+| 19 | CRIU (Checkpoint Restore In Userspace) | 1018 |
+| 20 | protobuf-c | 1019 |
+
+For the full list of all registered extensions, see [docs/options.md](https://github.com/protocolbuffers/protobuf/blob/main/docs/options.md) in the protobuf repository.
+
+## How to define a custom option
+
+Custom options are defined by extending the relevant descriptor options message:
+
+```protobuf
+syntax = "proto3";
+
+import "google/protobuf/descriptor.proto";
+
+// Extend FieldOptions with your registered extension number.
+extend google.protobuf.FieldOptions {
+  string my_custom_option = 51234;  // Use your registered number
+}
+
+message MyMessage {
+  string name = 1 [(my_custom_option) = "some value"];
+}
+```
+
+You can extend any of the following descriptor messages:
+
+| Options message | Scope |
+|-----------------|-------|
+| `google.protobuf.FileOptions` | Applied to a `.proto` file |
+| `google.protobuf.MessageOptions` | Applied to a message type |
+| `google.protobuf.FieldOptions` | Applied to a message field |
+| `google.protobuf.OneofOptions` | Applied to a oneof group |
+| `google.protobuf.EnumOptions` | Applied to an enum type |
+| `google.protobuf.EnumValueOptions` | Applied to an enum value |
+| `google.protobuf.ServiceOptions` | Applied to a service |
+| `google.protobuf.MethodOptions` | Applied to an RPC method |
+
+## Extension number ranges
+
+| Range | Purpose |
+|-------|---------|
+| 1 – 999 | Reserved for use by the Protocol Buffers implementation itself. Do not use. |
+| 1000 – 536,870,911 | Available for custom options; register your number in the global registry. |
+| 19000 – 19999 | Reserved for the Protocol Buffers implementation. Do not use. |
+
+<Warning>
+Always register your extension numbers before publishing `.proto` files that use custom options. Using an unregistered number is fine for private use, but risks collision if your files are used alongside other third-party protos.
+</Warning>
+
+## How to request an extension number
+
+<Steps>
+  <Step title="Choose an extension number">
+    Pick any unregistered number in the range 1000–536,870,911. Check [docs/options.md](https://github.com/protocolbuffers/protobuf/blob/main/docs/options.md) to confirm it is available.
+  </Step>
+  <Step title="Submit a pull request or issue">
+    Register your number by doing one of the following:
+
+    - Open a [pull request](https://github.com/protocolbuffers/protobuf/pulls) that adds an entry to `docs/options.md` with your project name, website, and the extension number.
+    - Open an [issue](https://github.com/protocolbuffers/protobuf/issues) with your project name and website, and the protobuf maintainers will add an entry for you.
+  </Step>
+  <Step title="Update your extension definition">
+    Once your number is registered, use it in your `.proto` file's extension definition.
+  </Step>
+</Steps>
+
+<Tip>
+If your project needs multiple extension numbers, you can request a contiguous range (e.g., `1500 to 1510`). Describe your use case in the pull request or issue.
+</Tip>

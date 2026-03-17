@@ -1,0 +1,288 @@
+---
+title: Well-known types reference
+description: Complete reference for all Protocol Buffers well-known types, including proto definitions, JSON mappings, and usage notes for Any, Timestamp, Duration, Struct, Value, ListValue, Empty, FieldMask, and wrapper types.
+---
+
+Well-known types are a set of commonly needed message types included with the Protocol Buffers distribution. They have special JSON encodings and are available under the `google.protobuf` package.
+
+Import them in your `.proto` files using:
+
+```protobuf
+import "google/protobuf/any.proto";
+import "google/protobuf/timestamp.proto";
+// etc.
+```
+
+## google.protobuf.Any
+
+**Source:** `google/protobuf/any.proto`
+
+`Any` contains an arbitrary serialized protocol buffer message along with a URL that identifies the type of the serialized message.
+
+```protobuf
+message Any {
+  // Identifies the type of the serialized Protobuf message with a URI reference
+  // consisting of a prefix ending in a slash and the fully-qualified type name.
+  // Example: type.googleapis.com/google.protobuf.StringValue
+  string type_url = 1;
+
+  // Holds a Protobuf serialization of the type described by type_url.
+  bytes value = 2;
+}
+```
+
+**JSON mapping:**
+
+- For types without special JSON encodings: the message is serialized to its normal JSON form with an additional `@type` field containing the type URL.
+- For well-known types: a `@type` key with the type URL and a `value` key with the JSON-serialized value.
+
+```json
+// Wrapping a google.protobuf.Duration:
+{
+  "@type": "type.googleapis.com/google.protobuf.Duration",
+  "value": "1.212s"
+}
+
+// Wrapping a custom message:
+{
+  "@type": "type.googleapis.com/mypackage.MyMessage",
+  "fieldOne": "hello",
+  "fieldTwo": 42
+}
+```
+
+**Usage notes:**
+- Use `pack`/`unpack` utilities provided by each language runtime instead of manipulating `type_url` and `value` directly.
+- Do not attempt to contact the URLs in `type_url`. They are identifiers, not resolvable endpoints.
+- The text format representation uses `[type.googleapis.com/foo.Bar] { ... }` syntax.
+
+---
+
+## google.protobuf.Timestamp
+
+**Source:** `google/protobuf/timestamp.proto`
+
+Represents a point in time independent of any time zone or local calendar, encoded as seconds and nanoseconds since the Unix epoch.
+
+```protobuf
+message Timestamp {
+  // Seconds of UTC time since Unix epoch 1970-01-01T00:00:00Z.
+  // Must be between -62135596800 and 253402300799 inclusive.
+  int64 seconds = 1;
+
+  // Non-negative fractions of a second at nanosecond resolution.
+  // Must be between 0 and 999,999,999 inclusive.
+  int32 nanos = 2;
+}
+```
+
+**JSON mapping:** RFC 3339 string in the form `"{year}-{month}-{day}T{hour}:{min}:{sec}[.{frac_sec}]Z"`.
+
+```json
+"2017-01-15T01:30:15.01Z"
+```
+
+**Usage notes:**
+- Range: `0001-01-01T00:00:00Z` to `9999-12-31T23:59:59.999999999Z`.
+- Leap seconds are "smeared" using a 24-hour linear smear; no leap second table is needed.
+- A ProtoJSON serializer should always use UTC ("Z" suffix). A parser should accept both UTC and offset-based timezones.
+
+---
+
+## google.protobuf.Duration
+
+**Source:** `google/protobuf/duration.proto`
+
+Represents a signed, fixed-length span of time at nanosecond resolution, independent of any calendar.
+
+```protobuf
+message Duration {
+  // Signed seconds of the span of time.
+  // Must be from -315,576,000,000 to +315,576,000,000 inclusive.
+  int64 seconds = 1;
+
+  // Signed fractions of a second at nanosecond resolution.
+  // Must be from -999,999,999 to +999,999,999 inclusive.
+  // The sign of nanos must match seconds for non-zero values.
+  int32 nanos = 2;
+}
+```
+
+**JSON mapping:** A string ending in `"s"`, preceded by the number of seconds with nanoseconds as a fractional part.
+
+```json
+"3s"          // 3 seconds exactly
+"3.000000001s" // 3 seconds and 1 nanosecond
+"3.000001s"   // 3 seconds and 1 microsecond
+```
+
+**Usage notes:**
+- Range: approximately ±10,000 years.
+- Related to `Timestamp`: the difference between two `Timestamp` values is a `Duration`.
+
+---
+
+## google.protobuf.Struct, Value, NullValue, ListValue
+
+**Source:** `google/protobuf/struct.proto`
+
+These four types together represent an arbitrary JSON object.
+
+```protobuf
+// Represents a JSON object: an unordered map of string keys to Values.
+message Struct {
+  map<string, Value> fields = 1;
+}
+
+// Represents a JSON value (null, number, string, bool, object, or array).
+message Value {
+  oneof kind {
+    NullValue null_value  = 1;
+    double    number_value = 2;
+    string    string_value = 3;
+    bool      bool_value   = 4;
+    Struct    struct_value = 5;
+    ListValue list_value   = 6;
+  }
+}
+
+// Sentinel for JSON null.
+enum NullValue {
+  NULL_VALUE = 0;
+}
+
+// Represents a JSON array.
+message ListValue {
+  repeated Value values = 1;
+}
+```
+
+**JSON mapping:**
+
+| Type | JSON encoding |
+|------|---------------|
+| `Struct` | JSON object: `{ "key": ... }` |
+| `Value` | The corresponding JSON value |
+| `NullValue` | JSON `null` |
+| `ListValue` | JSON array: `[...]` |
+
+**Usage notes:**
+- Use these types only when you genuinely need to parse arbitrary JSON payloads. For typed data, define a custom message.
+- `Struct` cannot represent large `Int64` values or `NaN`/`Infinity`, as JSON does not support them in the number type.
+
+---
+
+## google.protobuf.Empty
+
+**Source:** `google/protobuf/empty.proto`
+
+A generic empty message to avoid defining duplicated empty messages. Use it as the request or response type of an API method that does not need parameters or return values.
+
+```protobuf
+message Empty {}
+```
+
+**JSON mapping:** An empty JSON object `{}`.
+
+```protobuf
+// Typical usage in a service:
+service Foo {
+  rpc Bar(google.protobuf.Empty) returns (google.protobuf.Empty);
+}
+```
+
+---
+
+## google.protobuf.FieldMask
+
+**Source:** `google/protobuf/field_mask.proto`
+
+Represents a set of symbolic field paths, used to specify which fields of a message should be returned by a read operation or updated by a write operation.
+
+```protobuf
+message FieldMask {
+  // The set of field mask paths.
+  repeated string paths = 1;
+}
+```
+
+**JSON mapping:** A single comma-separated string. Field names in each path are converted between `snake_case` (proto) and `lowerCamelCase` (JSON).
+
+```json
+// Proto text format:
+// paths: "user.display_name"
+// paths: "photo"
+
+// JSON:
+"user.displayName,photo"
+```
+
+**Usage notes:**
+- Field paths use dot notation to reference nested fields: `"f.b.d"`.
+- A repeated field may only appear at the last position of a path.
+- For update operations (AIP-134), support the special value `"*"` meaning full replace.
+- For get operations (AIP-157), an omitted field mask means return all fields.
+- Update operations using a field mask should use HTTP `PATCH`, not `PUT`.
+
+---
+
+## Wrapper types
+
+**Source:** `google/protobuf/wrappers.proto`
+
+Wrapper messages for all primitive types. These were originally needed to represent nullable primitives in proto3 before the `optional` keyword was introduced.
+
+<Warning>
+Wrapper types are not recommended for new APIs. For presence on a primitive field in proto3, use the `optional` keyword instead. Wrapper types have no meaningful use in repeated fields, map entries, or oneof fields.
+</Warning>
+
+```protobuf
+message DoubleValue  { double  value = 1; }
+message FloatValue   { float   value = 1; }
+message Int64Value   { int64   value = 1; }
+message UInt64Value  { uint64  value = 1; }
+message Int32Value   { int32   value = 1; }
+message UInt32Value  { uint32  value = 1; }
+message BoolValue    { bool    value = 1; }
+message StringValue  { string  value = 1; }
+message BytesValue   { bytes   value = 1; }
+```
+
+**JSON mappings:**
+
+| Wrapper type | JSON encoding |
+|--------------|---------------|
+| `DoubleValue` | JSON number |
+| `FloatValue` | JSON number |
+| `Int64Value` | JSON string |
+| `UInt64Value` | JSON string |
+| `Int32Value` | JSON number |
+| `UInt32Value` | JSON number |
+| `BoolValue` | `true` or `false` |
+| `StringValue` | JSON string |
+| `BytesValue` | Base64-encoded JSON string |
+
+---
+
+## Summary table
+
+| Well-known type | Import path | JSON encoding |
+|-----------------|-------------|---------------|
+| `google.protobuf.Any` | `google/protobuf/any.proto` | `{"@type": "...", ...}` |
+| `google.protobuf.Timestamp` | `google/protobuf/timestamp.proto` | RFC 3339 string |
+| `google.protobuf.Duration` | `google/protobuf/duration.proto` | String with `"s"` suffix |
+| `google.protobuf.Struct` | `google/protobuf/struct.proto` | JSON object |
+| `google.protobuf.Value` | `google/protobuf/struct.proto` | Any JSON value |
+| `google.protobuf.ListValue` | `google/protobuf/struct.proto` | JSON array |
+| `google.protobuf.NullValue` | `google/protobuf/struct.proto` | JSON `null` |
+| `google.protobuf.Empty` | `google/protobuf/empty.proto` | `{}` |
+| `google.protobuf.FieldMask` | `google/protobuf/field_mask.proto` | Comma-separated camelCase string |
+| `google.protobuf.DoubleValue` | `google/protobuf/wrappers.proto` | JSON number or `null` |
+| `google.protobuf.FloatValue` | `google/protobuf/wrappers.proto` | JSON number or `null` |
+| `google.protobuf.Int64Value` | `google/protobuf/wrappers.proto` | JSON string or `null` |
+| `google.protobuf.UInt64Value` | `google/protobuf/wrappers.proto` | JSON string or `null` |
+| `google.protobuf.Int32Value` | `google/protobuf/wrappers.proto` | JSON number or `null` |
+| `google.protobuf.UInt32Value` | `google/protobuf/wrappers.proto` | JSON number or `null` |
+| `google.protobuf.BoolValue` | `google/protobuf/wrappers.proto` | `true`/`false` or `null` |
+| `google.protobuf.StringValue` | `google/protobuf/wrappers.proto` | JSON string or `null` |
+| `google.protobuf.BytesValue` | `google/protobuf/wrappers.proto` | Base64 string or `null` |

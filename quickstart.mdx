@@ -1,80 +1,432 @@
 ---
-title: "Quickstart"
-description: "Start building awesome documentation in minutes"
+title: Quickstart
+description: Define a .proto schema, compile it with protoc, and use the generated code in Python and Java.
 ---
 
-## Get started in three steps
+This guide walks you through the core Protocol Buffers workflow using the address book example from the protobuf repository. You will define a schema, compile it, and use the generated code to serialize and parse messages.
 
-Get your documentation site running locally and make your first customization.
+<Info>
+Before you begin, make sure you have installed `protoc` and the runtime library for your language. See the [Installation guide](/installation) for instructions.
+</Info>
 
-### Step 1: Set up your local environment
+<Steps>
+  <Step title="Define a .proto file">
+    Create a file named `addressbook.proto`. This schema defines two messages: `Person` (with nested `PhoneNumber` and `PhoneType`) and `AddressBook`.
 
-<AccordionGroup>
-  <Accordion icon="copy" title="Clone your docs locally">
-    During the onboarding process, you created a GitHub repository with your docs content if you didn't already have one. You can find a link to this repository in your [dashboard](https://dashboard.mintlify.com).
-    
-    To clone the repository locally so that you can make and preview changes to your docs, follow the [Cloning a repository](https://docs.github.com/en/repositories/creating-and-managing-repositories/cloning-a-repository) guide in the GitHub docs.
-  </Accordion>
-  <Accordion icon="rectangle-terminal" title="Start the preview server">
-    1. Install the Mintlify CLI: `npm i -g mint`
-    2. Navigate to your docs directory and run: `mint dev`
-    3. Open `http://localhost:3000` to see your docs live!
-    
-    <Tip>Your preview updates automatically as you edit files.</Tip>
-  </Accordion>
-</AccordionGroup>
+    ```protobuf addressbook.proto
+    syntax = "proto3";
+    package tutorial;
 
-### Step 2: Deploy your changes
+    import "google/protobuf/timestamp.proto";
 
-<AccordionGroup>
-  <Accordion icon="github" title="Install our GitHub app">
-    Install the Mintlify GitHub app from your [dashboard](https://dashboard.mintlify.com/settings/organization/github-app).
-    
-    Our GitHub app automatically deploys your changes to your docs site, so you don't need to manage deployments yourself.
-</Accordion>
-<Accordion icon="palette" title="Update your site name and colors">
-    For a first change, let's update the name and colors of your docs site.
+    option java_multiple_files = true;
+    option java_package = "com.example.tutorial.protos";
+    option java_outer_classname = "AddressBookProtos";
 
-    1. Open `docs.json` in your editor.
-    2. Change the `"name"` field to your project name.
-    3. Update the `"colors"` to match your brand.
-    4. Save and see your changes instantly at `http://localhost:3000`.
+    message Person {
+      string name = 1;
+      int32 id = 2;  // Unique ID number for this person.
+      string email = 3;
 
-    <Tip>Try changing the primary color to see an immediate difference!</Tip>
-  </Accordion>
-</AccordionGroup>
+      enum PhoneType {
+        MOBILE = 0;
+        HOME = 1;
+        WORK = 2;
+      }
 
-### Step 3: Go live
+      message PhoneNumber {
+        string number = 1;
+        PhoneType type = 2;
+      }
 
-<Accordion icon="rocket" title="Publish your docs">
-  1. Commit and push your changes.
-  2. Your docs will update and be live in moments!
-</Accordion>
+      repeated PhoneNumber phones = 4;
+
+      google.protobuf.Timestamp last_updated = 5;
+    }
+
+    // Our address book file is just one of these.
+    message AddressBook {
+      repeated Person people = 1;
+    }
+    ```
+
+    A few things to note:
+
+    - `syntax = "proto3"` selects the proto3 language version.
+    - Field numbers (e.g., `= 1`, `= 2`) uniquely identify each field in the binary encoding. They must not change once your message type is in use.
+    - The `repeated` keyword means the field can appear zero or more times (equivalent to a list).
+    - `import "google/protobuf/timestamp.proto"` pulls in a well-known type bundled with protobuf.
+  </Step>
+
+  <Step title="Compile with protoc">
+    Run `protoc` against your `.proto` file and specify the output directory for your target language.
+
+    <Tabs>
+      <Tab title="Python">
+        ```bash
+        protoc --python_out=. addressbook.proto
+        ```
+
+        This generates `addressbook_pb2.py` in the current directory.
+
+        To also generate a `.pyi` type stub for IDE support:
+
+        ```bash
+        protoc --python_out=pyi_out:. addressbook.proto
+        ```
+      </Tab>
+      <Tab title="Java">
+        ```bash
+        protoc --java_out=${OUTPUT_DIR} addressbook.proto
+        ```
+
+        Because `java_multiple_files = true` is set in the schema, `protoc` generates a separate `.java` file for each top-level message type (`Person.java`, `AddressBook.java`, etc.) in the package directory `com/example/tutorial/protos/`.
+      </Tab>
+      <Tab title="C++">
+        ```bash
+        protoc --cpp_out=. addressbook.proto
+        ```
+
+        This generates `addressbook.pb.h` and `addressbook.pb.cc`.
+      </Tab>
+      <Tab title="C#">
+        ```bash
+        protoc --csharp_out=. addressbook.proto
+        ```
+      </Tab>
+      <Tab title="Ruby">
+        ```bash
+        protoc --ruby_out=. addressbook.proto
+        ```
+      </Tab>
+      <Tab title="PHP">
+        ```bash
+        protoc --php_out=. addressbook.proto
+        ```
+      </Tab>
+    </Tabs>
+
+    <Tip>
+    Make sure the version of the language runtime you install matches (or is newer than) the version of `protoc` you compiled with.
+    </Tip>
+  </Step>
+
+  <Step title="Write data">
+    Use the generated classes to build and serialize a message. The following examples read an address book from a file, add a person, and write it back out.
+
+    <Tabs>
+      <Tab title="Python">
+        ```python add_person.py
+        import addressbook_pb2
+        import sys
+
+        def PromptForAddress(person):
+            person.id = int(input("Enter person ID number: "))
+            person.name = input("Enter name: ")
+
+            email = input("Enter email address (blank for none): ")
+            if email != "":
+                person.email = email
+
+            while True:
+                number = input("Enter a phone number (or leave blank to finish): ")
+                if number == "":
+                    break
+
+                phone_number = person.phones.add()
+                phone_number.number = number
+
+                type = input("Is this a mobile, home, or work phone? ")
+                if type == "mobile":
+                    phone_number.type = addressbook_pb2.Person.MOBILE
+                elif type == "home":
+                    phone_number.type = addressbook_pb2.Person.HOME
+                elif type == "work":
+                    phone_number.type = addressbook_pb2.Person.WORK
+                else:
+                    print("Unknown phone type; leaving as default value.")
+
+
+        address_book = addressbook_pb2.AddressBook()
+
+        # Read the existing address book.
+        try:
+            with open(sys.argv[1], "rb") as f:
+                address_book.ParseFromString(f.read())
+        except IOError:
+            print(sys.argv[1] + ": File not found. Creating a new file.")
+
+        # Add an address.
+        PromptForAddress(address_book.people.add())
+
+        # Write the new address book back to disk.
+        with open(sys.argv[1], "wb") as f:
+            f.write(address_book.SerializeToString())
+        ```
+      </Tab>
+      <Tab title="Java">
+        ```java AddPerson.java
+        import com.example.tutorial.protos.AddressBook;
+        import com.example.tutorial.protos.Person;
+        import com.google.protobuf.util.Timestamps;
+        import java.io.BufferedReader;
+        import java.io.FileInputStream;
+        import java.io.FileNotFoundException;
+        import java.io.FileOutputStream;
+        import java.io.InputStreamReader;
+        import java.io.PrintStream;
+
+        class AddPerson {
+            static Person PromptForAddress(BufferedReader stdin,
+                                           PrintStream stdout) throws Exception {
+                Person.Builder person = Person.newBuilder();
+
+                stdout.print("Enter person ID: ");
+                person.setId(Integer.valueOf(stdin.readLine()));
+
+                stdout.print("Enter name: ");
+                person.setName(stdin.readLine());
+
+                stdout.print("Enter email address (blank for none): ");
+                String email = stdin.readLine();
+                if (email.length() > 0) {
+                    person.setEmail(email);
+                }
+
+                while (true) {
+                    stdout.print("Enter a phone number (or leave blank to finish): ");
+                    String number = stdin.readLine();
+                    if (number.length() == 0) break;
+
+                    Person.PhoneNumber.Builder phoneNumber =
+                        Person.PhoneNumber.newBuilder().setNumber(number);
+
+                    stdout.print("Is this a mobile, home, or work phone? ");
+                    String type = stdin.readLine();
+                    if (type.equals("mobile")) {
+                        phoneNumber.setType(Person.PhoneType.MOBILE);
+                    } else if (type.equals("home")) {
+                        phoneNumber.setType(Person.PhoneType.HOME);
+                    } else if (type.equals("work")) {
+                        phoneNumber.setType(Person.PhoneType.WORK);
+                    } else {
+                        stdout.println("Unknown phone type. Using default.");
+                    }
+
+                    person.addPhones(phoneNumber);
+                    person.setLastUpdated(Timestamps.now());
+                }
+
+                return person.build();
+            }
+
+            public static void main(String[] args) throws Exception {
+                AddressBook.Builder addressBook = AddressBook.newBuilder();
+
+                try {
+                    FileInputStream input = new FileInputStream(args[0]);
+                    try {
+                        addressBook.mergeFrom(input);
+                    } finally {
+                        input.close();
+                    }
+                } catch (FileNotFoundException e) {
+                    System.out.println(args[0] + ": File not found. Creating a new file.");
+                }
+
+                addressBook.addPeople(
+                    PromptForAddress(
+                        new BufferedReader(new InputStreamReader(System.in)),
+                        System.out));
+
+                FileOutputStream output = new FileOutputStream(args[0]);
+                try {
+                    addressBook.build().writeTo(output);
+                } finally {
+                    output.close();
+                }
+            }
+        }
+        ```
+      </Tab>
+      <Tab title="C++">
+        ```cpp add_person.cc
+        #include <ctime>
+        #include <fstream>
+        #include <google/protobuf/util/time_util.h>
+        #include <iostream>
+        #include <string>
+        #include "addressbook.pb.h"
+
+        using namespace std;
+        using google::protobuf::util::TimeUtil;
+
+        void PromptForAddress(tutorial::Person* person) {
+            cout << "Enter person ID number: ";
+            int id;
+            cin >> id;
+            person->set_id(id);
+            cin.ignore(256, '\n');
+
+            cout << "Enter name: ";
+            getline(cin, *person->mutable_name());
+
+            cout << "Enter email address (blank for none): ";
+            string email;
+            getline(cin, email);
+            if (!email.empty()) {
+                person->set_email(email);
+            }
+
+            while (true) {
+                cout << "Enter a phone number (or leave blank to finish): ";
+                string number;
+                getline(cin, number);
+                if (number.empty()) break;
+
+                tutorial::Person::PhoneNumber* phone_number = person->add_phones();
+                phone_number->set_number(number);
+
+                cout << "Is this a mobile, home, or work phone? ";
+                string type;
+                getline(cin, type);
+                if (type == "mobile") {
+                    phone_number->set_type(tutorial::Person::MOBILE);
+                } else if (type == "home") {
+                    phone_number->set_type(tutorial::Person::HOME);
+                } else if (type == "work") {
+                    phone_number->set_type(tutorial::Person::WORK);
+                } else {
+                    cout << "Unknown phone type. Using default." << endl;
+                }
+            }
+            *person->mutable_last_updated() = TimeUtil::SecondsToTimestamp(time(NULL));
+        }
+
+        int main(int argc, char* argv[]) {
+            GOOGLE_PROTOBUF_VERIFY_VERSION;
+
+            tutorial::AddressBook address_book;
+
+            {
+                fstream input(argv[1], ios::in | ios::binary);
+                if (!input) {
+                    cout << argv[1] << ": File not found. Creating a new file." << endl;
+                } else if (!address_book.ParseFromIstream(&input)) {
+                    cerr << "Failed to parse address book." << endl;
+                    return -1;
+                }
+            }
+
+            PromptForAddress(address_book.add_people());
+
+            {
+                fstream output(argv[1], ios::out | ios::trunc | ios::binary);
+                if (!address_book.SerializeToOstream(&output)) {
+                    cerr << "Failed to write address book." << endl;
+                    return -1;
+                }
+            }
+
+            google::protobuf::ShutdownProtobufLibrary();
+            return 0;
+        }
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Read data">
+    Parse a serialized file and iterate over the messages it contains.
+
+    <Tabs>
+      <Tab title="Python">
+        ```python list_people.py
+        import addressbook_pb2
+        import sys
+
+        def ListPeople(address_book):
+            for person in address_book.people:
+                print("Person ID:", person.id)
+                print("  Name:", person.name)
+                if person.email != "":
+                    print("  E-mail address:", person.email)
+
+                for phone_number in person.phones:
+                    if phone_number.type == addressbook_pb2.Person.MOBILE:
+                        print("  Mobile phone #:", end=" ")
+                    elif phone_number.type == addressbook_pb2.Person.HOME:
+                        print("  Home phone #:", end=" ")
+                    elif phone_number.type == addressbook_pb2.Person.WORK:
+                        print("  Work phone #:", end=" ")
+                    print(phone_number.number)
+
+
+        address_book = addressbook_pb2.AddressBook()
+
+        with open(sys.argv[1], "rb") as f:
+            address_book.ParseFromString(f.read())
+
+        ListPeople(address_book)
+        ```
+      </Tab>
+      <Tab title="Java">
+        ```java ListPeople.java
+        import com.example.tutorial.protos.AddressBook;
+        import com.example.tutorial.protos.Person;
+        import java.io.FileInputStream;
+
+        class ListPeople {
+            static void Print(AddressBook addressBook) {
+                for (Person person : addressBook.getPeopleList()) {
+                    System.out.println("Person ID: " + person.getId());
+                    System.out.println("  Name: " + person.getName());
+                    if (!person.getEmail().isEmpty()) {
+                        System.out.println("  E-mail address: " + person.getEmail());
+                    }
+
+                    for (Person.PhoneNumber phoneNumber : person.getPhonesList()) {
+                        switch (phoneNumber.getType()) {
+                            case MOBILE:
+                                System.out.print("  Mobile phone #: ");
+                                break;
+                            case HOME:
+                                System.out.print("  Home phone #: ");
+                                break;
+                            case WORK:
+                                System.out.print("  Work phone #: ");
+                                break;
+                        }
+                        System.out.println(phoneNumber.getNumber());
+                    }
+                }
+            }
+
+            public static void main(String[] args) throws Exception {
+                AddressBook addressBook =
+                    AddressBook.parseFrom(new FileInputStream(args[0]));
+                Print(addressBook);
+            }
+        }
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+</Steps>
+
+## Cross-language compatibility
+
+Because all language runtimes share the same binary wire format, you can write data with one language and read it with another. For example, the address book examples in the protobuf repository all use the same `addressbook.data` file:
+
+```bash
+# Write using Python
+python add_person.py addressbook.data
+
+# Read using Java
+java -cp .:protobuf-java-4.28.2.jar ListPeople addressbook.data
+```
 
 ## Next steps
 
-Now that you have your docs running, explore these key features:
-
-<CardGroup cols={2}>
-
-<Card title="Write Content" icon="pen-to-square" href="/essentials/markdown">
-  Learn MDX syntax and start writing your documentation.
-</Card>
-
-<Card title="Customize style" icon="palette" href="/essentials/settings">
-  Make your docs match your brand perfectly.
-</Card>
-
-<Card title="Add code examples" icon="square-code" href="/essentials/code">
-  Include syntax-highlighted code blocks.
-</Card>
-
-<Card title="API documentation" icon="code" href="/api-reference/introduction">
-  Auto-generate API docs from OpenAPI specs.
-</Card>
-
-</CardGroup>
-
-<Note>
-  **Need help?** See our [full documentation](https://mintlify.com/docs) or join our [community](https://mintlify.com/community).
-</Note>
+- Read the [Installation guide](/installation) to set up `protoc` and your language runtime.
+- Explore the full set of scalar types, nested messages, and field options in the proto3 language reference.

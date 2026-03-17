@@ -1,0 +1,160 @@
+---
+title: C# Guide
+description: Use Protocol Buffers with C# — NuGet setup, code generation, the builder pattern, and JSON support.
+---
+
+The C# Protocol Buffers runtime (version `3.35-dev`) targets .NET 4.5+, .NET Standard 1.1/2.0, and .NET 5+. The `Google.Protobuf` NuGet package is the easiest way to get started.
+
+## Installation
+
+<Steps>
+  <Step title="Add the NuGet package">
+    In your project directory, run:
+
+    ```bash
+    dotnet add package Google.Protobuf
+    ```
+
+    Or add it via the NuGet Package Manager in Visual Studio by searching for `Google.Protobuf`.
+  </Step>
+
+  <Step title="Install the protoc tools package">
+    The `Google.Protobuf.Tools` package includes a precompiled `protoc.exe` and the well-known `.proto` files:
+
+    ```bash
+    dotnet add package Google.Protobuf.Tools
+    ```
+  </Step>
+
+  <Step title="Generate C# code from your .proto files">
+    Invoke `protoc` with `--csharp_out`:
+
+    ```bash
+    protoc --csharp_out=. addressbook.proto
+    ```
+
+    This generates `Addressbook.cs` (or multiple files if using `option csharp_namespace`).
+  </Step>
+
+  <Step title="Add generated files to your project">
+    Include the generated `.cs` files in your project. They depend only on `Google.Protobuf`, which you already added in step 1.
+  </Step>
+</Steps>
+
+## Generating code
+
+The `--csharp_out` flag tells `protoc` to emit C# code. The `csharp_namespace` file option controls the namespace for generated types:
+
+```protobuf
+// addressbook.proto
+syntax = "proto3";
+package tutorial;
+
+option csharp_namespace = "Google.Protobuf.Examples.AddressBook";
+```
+
+```bash
+protoc --csharp_out=Generated addressbook.proto
+```
+
+## Working with messages
+
+### Creating and mutating messages
+
+C# generated message classes are mutable objects. Set properties directly:
+
+```csharp
+using Google.Protobuf.Examples.AddressBook;
+
+var person = new Person
+{
+    Id = 1234,
+    Name = "Jane Doe",
+    Email = "jane@example.com",
+    Phones =
+    {
+        new Person.Types.PhoneNumber
+        {
+            Number = "+1-555-0100",
+            Type = Person.Types.PhoneType.Mobile
+        }
+    }
+};
+```
+
+### Serializing and parsing
+
+<CodeGroup>
+
+```csharp serialize to byte array
+byte[] bytes = person.ToByteArray();
+```
+
+```csharp parse from byte array
+Person parsed = Person.Parser.ParseFrom(bytes);
+```
+
+```csharp serialize to stream
+using (var output = File.Create("person.bin"))
+{
+    person.WriteTo(output);
+}
+```
+
+```csharp parse from stream
+Person parsed;
+using (var input = File.OpenRead("person.bin"))
+{
+    parsed = Person.Parser.ParseFrom(input);
+}
+```
+
+</CodeGroup>
+
+## JSON support
+
+The C# runtime includes full support for the canonical protobuf JSON format:
+
+```csharp
+using Google.Protobuf;
+
+// Serialize to JSON
+string json = JsonFormatter.Default.Format(person);
+
+// Parse from JSON
+var parser = new JsonParser(JsonParser.Settings.Default);
+Person fromJson = parser.Parse<Person>(json);
+```
+
+<Note>
+  The JSON format uses proto field names by default. Pass `JsonFormatter.Settings` options to use `camelCase` names or to include fields with default values.
+</Note>
+
+## Supported platforms
+
+| Target | Framework |
+|--------|-----------|
+| Desktop / server | .NET 4.5+, .NET 5+ |
+| Cross-platform | .NET Standard 1.1, .NET Standard 2.0 |
+| Visual Studio | 2012 and later |
+
+<Warning>
+  When compiling generated code with C# compilers older than version 7.2, define the `GOOGLE_PROTOBUF_REFSTRUCT_COMPATIBILITY_MODE` symbol in your project. This prevents the generated classes from implementing `IBufferMessage`, which uses `ref struct` types unavailable in older compilers.
+</Warning>
+
+## Key API reference
+
+<CardGroup cols={2}>
+  <Card title="IMessage" icon="cube">
+    All generated classes implement `Google.Protobuf.IMessage<T>`. Provides `WriteTo(CodedOutputStream)`, `MergeFrom(CodedInputStream)`, `CalculateSize()`, and `Clone()`.
+  </Card>
+  <Card title="MessageParser" icon="arrow-right-left">
+    Each generated class exposes a static `Parser` property of type `MessageParser<T>`. Use `Person.Parser.ParseFrom(bytes)` or `Person.Parser.ParseFrom(stream)`.
+  </Card>
+  <Card title="JSON" icon="braces">
+    `JsonFormatter.Default.Format(message)` for serialization. `JsonParser.Default.Parse<T>(json)` for parsing. Part of the `Google.Protobuf` package — no extra dependency needed.
+  </Card>
+  <Card title="Well-known types" icon="star">
+    `Google.Protobuf.WellKnownTypes` namespace contains C# representations of `Timestamp`, `Duration`, `Struct`, `Any`, and other well-known types with special serialization behavior.
+  </Card>
+</CardGroup>

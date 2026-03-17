@@ -1,0 +1,231 @@
+---
+title: Arena allocation (C++)
+description: Improve C++ protobuf performance by allocating messages on an arena to eliminate per-object heap overhead and reduce allocator pressure.
+---
+
+Arena allocation is a C++-specific optimization that aggregates many small allocations into larger blocks and frees them all at once when the arena is destroyed. For workloads that create and destroy many protobuf messages in a tight loop, arenas can substantially reduce allocator overhead and improve cache locality.
+
+## How arenas work
+
+Normally, each protobuf message is heap-allocated individually with `new`, and its destructor is called with `delete` when it goes out of scope. For high-throughput servers that process millions of messages per second, the cost of repeated calls to the global allocator adds up.
+
+An arena is a memory pool. You allocate a block of memory upfront, then create objects inside it using placement-new. When the arena is destroyed, it frees all the memory at once without calling individual object destructors. This amortizes allocation cost and avoids fragmentation.
+
+The `google::protobuf::Arena` class in `arena.h` provides this functionality:
+
+```cpp
+// Arena allocator. Arena allocation replaces ordinary (heap-based) allocation
+// with new/delete, and improves performance by aggregating allocations into
+// larger blocks and freeing allocations all at once.
+//
+// This is a thread-safe implementation: multiple threads may allocate from the
+// arena concurrently. Destruction is not thread-safe and the destructing
+// thread must synchronize with users of the arena first.
+class Arena final {
+ public:
+  inline Arena();
+  inline Arena(char* initial_block, size_t initial_block_size);
+  explicit Arena(const ArenaOptions& options);
+  // ...
+};
+```
+
+## Creating arena-allocated messages
+
+Use `Arena::Create<T>()` to allocate a message on an arena. If the arena pointer is null, the function falls back to heap allocation:
+
+```cpp
+#include "google/protobuf/arena.h"
+#include "myproject/messages.pb.h"
+
+void ProcessRequest() {
+  google::protobuf::Arena arena;
+
+  // Allocate a message on the arena
+  MyRequest* request = google::protobuf::Arena::Create<MyRequest>(&arena);
+  request->set_query("hello world");
+  request->set_page_number(1);
+
+  MyResponse* response = google::protobuf::Arena::Create<MyResponse>(&arena);
+
+  // ... process request, populate response ...
+
+  // All messages are freed when arena goes out of scope.
+  // Do NOT call delete on arena-allocated objects.
+}
+```
+
+<Warning>
+Never call `delete` on a message allocated with `Arena::Create`. The arena owns the memory. Calling delete on an arena-allocated object is undefined behavior.
+</Warning>
+
+To safely destroy objects that may or may not be arena-allocated, use `Arena::Destroy`:
+
+```cpp
+// Safe cleanup regardless of whether obj is on an arena or heap
+google::protobuf::Arena::Destroy(obj);
+```
+
+`Destroy` is a no-op for arena-allocated objects and calls `delete` for heap-allocated objects.
+
+## Arena options
+
+The `ArenaOptions` struct controls the arena's memory allocation behavior:
+
+```cpp
+struct ArenaOptions final {
+  // Size of the first block requested from system malloc.
+  // Subsequent blocks grow geometrically up to max_block_size.
+  size_t start_block_size = /* default */;
+
+  // Maximum block size requested from system malloc.
+  size_t max_block_size = /* default */;
+
+  // An optional pre-allocated initial block. The caller retains
+  // ownership of this memory after the arena is destroyed.
+  char* initial_block = nullptr;
+  size_t initial_block_size = 0;
+
+  // Custom allocator/deallocator function pointers (default: malloc/free)
+  void* (*block_alloc)(size_t) = nullptr;
+  void (*block_dealloc)(void*, size_t) = nullptr;
+};
+```
+
+Providing an `initial_block` eliminates the first malloc call entirely, which is useful for fixed-size, stack-allocated arenas:
+
+```cpp
+// Use a stack buffer as the arena's initial block
+char buf[4096];
+google::protobuf::ArenaOptions opts;
+opts.initial_block = buf;
+opts.initial_block_size = sizeof(buf);
+
+google::protobuf::Arena arena(opts);
+MyMessage* msg = google::protobuf::Arena::Create<MyMessage>(&arena);
+// Small messages fit entirely in the stack buffer — zero heap allocations
+```
+
+## Arena lifecycle
+
+The arena and all objects on it have the same lifetime:
+
+<Steps>
+  <Step title="Arena creation">
+    The arena is constructed. It may pre-allocate an initial block of memory.
+  </Step>
+  <Step title="Object allocation">
+    Objects are allocated on the arena with `Arena::Create<T>()`. Their constructors run normally. Sub-objects (nested messages, repeated fields, strings) allocated during construction are also placed on the arena.
+  </Step>
+  <Step title="Arena reset (optional)">
+    Calling `arena.Reset()` frees all memory, runs registered destructors, and returns the total space used. The arena can be reused after `Reset()`.
+```cpp
+uint64_t bytes_used = arena.Reset();
+// arena is now empty and ready for reuse
+```
+  </Step>
+  <Step title="Arena destruction">
+    When the arena goes out of scope or is explicitly destroyed, all memory is freed at once. Destructors are not called for messages whose types define `DestructorSkippable_` — this includes all generated protobuf message types, which is why arena allocation is so efficient for protos.
+  </Step>
+</Steps>
+
+## Monitoring arena memory
+
+Two methods give approximate figures for arena memory usage:
+
+```cpp
+google::protobuf::Arena arena;
+
+// ... allocate objects ...
+
+// Total space allocated from the system (sum of block sizes)
+uint64_t allocated = arena.SpaceAllocated();
+
+// Space actually used by objects (excludes free space and block overhead)
+uint64_t used = arena.SpaceUsed();
+
+std::cout << "Allocated: " << allocated << " bytes" << std::endl;
+std::cout << "Used:      " << used << " bytes" << std::endl;
+```
+
+<Note>
+`SpaceUsed()` is a best-effort estimate. In multi-threaded scenarios it may under- or over-count due to races with concurrent allocations. Do not use these values in unit test assertions.
+</Note>
+
+## Owning non-proto objects
+
+You can register heap-allocated objects to be freed when the arena is destroyed, even if those objects were not allocated on the arena:
+
+```cpp
+// Transfer ownership of a heap-allocated object to the arena
+auto* helper = new MyHelper();
+arena.Own(helper);  // helper will be deleted when arena is destroyed
+
+// Register a custom destructor for an object placement-newed into arena memory
+MyNonProto* obj = new (arena.AllocateAligned(sizeof(MyNonProto)))
+    MyNonProto();
+arena.OwnDestructor(obj);  // destructor called, memory freed by arena
+```
+
+## Allocating arrays
+
+`Arena::CreateArray<T>` allocates a raw array of trivially-constructible, trivially-destructible types:
+
+```cpp
+// Allocate 1024 int32s on the arena
+int32_t* buffer = google::protobuf::Arena::CreateArray<int32_t>(&arena, 1024);
+// buffer is freed when arena is destroyed
+```
+
+## Thread safety
+
+Multiple threads can allocate from the same arena concurrently. The arena's allocation path is thread-safe.
+
+However, **arena destruction is not thread-safe**. You must ensure that all threads have finished allocating from (or accessing objects on) the arena before destroying it. Typical patterns include:
+
+- Creating the arena on a single thread and destroying it on the same thread after all worker threads complete.
+- Using one arena per thread and destroying each arena on its owning thread.
+
+```cpp
+// Safe pattern: one arena per request, destroyed on the same thread
+void HandleRequest(const RawBytes& bytes) {
+  google::protobuf::Arena arena;
+  auto* req = google::protobuf::Arena::Create<MyRequest>(&arena);
+  req->ParseFromArray(bytes.data(), bytes.size());
+
+  // Process synchronously on this thread
+  auto* resp = google::protobuf::Arena::Create<MyResponse>(&arena);
+  DoWork(*req, resp);
+  SendResponse(*resp);
+  // arena and all messages are destroyed here
+}
+```
+
+## Enabling arenas in generated code
+
+Arena support is enabled by default for C++ generated code via the `cc_enable_arenas` file option, which defaults to `true`:
+
+```protobuf
+// This is the default; explicit declaration is not required
+option cc_enable_arenas = true;
+
+message MyMessage {
+  string text = 1;
+}
+```
+
+When `cc_enable_arenas` is true, generated message classes declare the `InternalArenaConstructable_` and `DestructorSkippable_` type traits, allowing `Arena::Create` to skip destructor calls and enabling the most efficient allocation path.
+
+## Performance considerations
+
+Arena allocation is most beneficial when:
+
+- You allocate and destroy many messages within a bounded scope (e.g., per-request processing).
+- Messages have deeply nested sub-messages or large repeated fields, since all sub-allocations also land on the arena.
+- Your workload creates many short-lived messages and allocator pressure is measurable.
+
+Arena allocation provides less benefit when messages are long-lived, when you frequently transfer message ownership across arena lifetimes, or when you copy messages between arenas (which requires a deep copy).
+
+<Tip>
+Profile before optimizing. Arenas add code complexity. Only adopt them when profiling shows that allocation overhead is a significant fraction of your request latency.
+</Tip>

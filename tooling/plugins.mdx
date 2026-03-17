@@ -1,0 +1,177 @@
+---
+title: protoc plugins
+description: How protoc plugins work, the plugin protocol using CodeGeneratorRequest and CodeGeneratorResponse, writing a custom plugin, and popular third-party plugins.
+---
+
+protoc has a plugin architecture that lets you add new code generators without modifying the compiler itself. Any `--xxx_out` flag that does not correspond to a built-in language causes protoc to invoke an external plugin.
+
+## Plugin naming convention
+
+Plugins follow a strict naming convention: `protoc-gen-<name>`. When you pass `--foo_out=DST_DIR` to protoc, it looks for an executable named `protoc-gen-foo` on `$PATH` (or at the path specified with `--plugin=protoc-gen-foo=/path/to/binary`).
+
+```bash
+# This invocation requires `protoc-gen-go` to be on $PATH
+protoc --proto_path=protos --go_out=gen protos/hello.proto
+
+# Or with an explicit path:
+protoc \
+  --proto_path=protos \
+  --plugin=protoc-gen-go=/usr/local/bin/protoc-gen-go \
+  --go_out=gen \
+  protos/hello.proto
+```
+
+## Plugin protocol
+
+protoc communicates with plugins over stdin and stdout using a well-defined binary protocol. No network or file system is used—plugins are simple executables.
+
+<Steps>
+  <Step title="protoc parses and validates the .proto files">
+    Before invoking any plugin, protoc fully parses all input `.proto` files, resolves imports, and performs semantic validation.
+  </Step>
+  <Step title="protoc serializes a CodeGeneratorRequest">
+    protoc builds a `google.protobuf.compiler.CodeGeneratorRequest` message containing the parsed `FileDescriptorProto` objects for all input files, the list of files to generate, and any options string passed via `--foo_out=OPT:DST_DIR`.
+  </Step>
+  <Step title="protoc forks the plugin and writes the request to stdin">
+    protoc forks the plugin executable and writes the serialized `CodeGeneratorRequest` to the plugin's stdin as a length-prefixed binary protobuf message.
+  </Step>
+  <Step title="The plugin reads the request, generates code, and writes a CodeGeneratorResponse">
+    The plugin reads the request from stdin, generates output files, and writes a serialized `google.protobuf.compiler.CodeGeneratorResponse` message to its stdout. Each file in the response has a `name` (relative path) and `content` (file content as a string).
+  </Step>
+  <Step title="protoc writes the generated files to disk">
+    protoc reads the response from the plugin's stdout and writes each file in the response to the output directory specified by `--foo_out`.
+  </Step>
+</Steps>
+
+### Key message types
+
+Both messages are defined in `google/protobuf/compiler/plugin.proto`, which ships with protobuf.
+
+```protobuf
+// Request sent by protoc to the plugin on stdin.
+message CodeGeneratorRequest {
+  // File descriptors for all files being compiled, plus all imports.
+  repeated FileDescriptorProto proto_file = 15;
+
+  // The .proto files to actually generate code for.
+  repeated string file_to_generate = 1;
+
+  // The value of --foo_out before the colon, if present.
+  optional string parameter = 2;
+
+  // Supported features of the code generator.
+  optional google.protobuf.compiler.Version compiler_version = 3;
+}
+
+// Response written by the plugin to stdout.
+message CodeGeneratorResponse {
+  // Error message; non-empty signals failure.
+  optional string error = 1;
+
+  // Supported features (e.g. FEATURE_PROTO3_OPTIONAL).
+  optional uint64 supported_features = 2;
+
+  // Each file to be generated.
+  repeated File file = 15;
+
+  message File {
+    optional string name = 1;    // Relative path
+    optional string content = 15; // File content
+  }
+}
+```
+
+## Passing options to plugins
+
+You can pass an options string to a plugin using the `OPT:DST_DIR` syntax:
+
+```bash
+# Pass "plugins=grpc" as the option string to protoc-gen-go
+protoc --proto_path=protos --go_out=plugins=grpc:gen protos/hello.proto
+
+# Pass multiple options separated by commas
+protoc --proto_path=protos --myplugin_out=opt1=val1,opt2=val2:gen protos/hello.proto
+```
+
+The option string is available in the plugin as `request.parameter`.
+
+## Writing a custom plugin
+
+You can write a plugin in any language that can read from stdin and write to stdout. The simplest approach is to use an existing protobuf library to deserialize the `CodeGeneratorRequest` and serialize the `CodeGeneratorResponse`.
+
+Below is a minimal Python plugin skeleton that generates a `.txt` file listing all messages in each `.proto` file:
+
+```python
+#!/usr/bin/env python3
+"""protoc-gen-msglist: lists all messages in each proto file."""
+import sys
+from google.protobuf.compiler import plugin_pb2
+from google.protobuf.descriptor_pb2 import FileDescriptorProto
+
+def generate(request: plugin_pb2.CodeGeneratorRequest) -> plugin_pb2.CodeGeneratorResponse:
+    response = plugin_pb2.CodeGeneratorResponse()
+    # Only generate for files explicitly requested, not imports.
+    generate_set = set(request.file_to_generate)
+    for proto_file in request.proto_file:
+        if proto_file.name not in generate_set:
+            continue
+        lines = [f"# Messages in {proto_file.name}"]
+        for msg in proto_file.message_type:
+            lines.append(f"- {proto_file.package}.{msg.name}")
+        out = response.file.add()
+        out.name = proto_file.name.replace(".proto", "_messages.txt")
+        out.content = "\n".join(lines) + "\n"
+    return response
+
+def main():
+    data = sys.stdin.buffer.read()
+    request = plugin_pb2.CodeGeneratorRequest()
+    request.ParseFromString(data)
+    response = generate(request)
+    sys.stdout.buffer.write(response.SerializeToString())
+
+if __name__ == "__main__":
+    main()
+```
+
+Name the script `protoc-gen-msglist`, make it executable, and place it on `$PATH`:
+
+```bash
+chmod +x protoc-gen-msglist
+export PATH="$PATH:$(pwd)"
+protoc --proto_path=protos --msglist_out=gen protos/hello.proto
+# Generates: gen/hello_messages.txt
+```
+
+<Tip>
+For production plugins, consider using the official plugin support libraries. Go has `google.golang.org/protobuf/compiler/protogen`, Python has `grpc_tools.protoc_main`, and Java has `com.google.protobuf:protoc-gen-javalite`.
+</Tip>
+
+## Popular third-party plugins
+
+<CardGroup cols={2}>
+  <Card title="protoc-gen-go" icon="golang">
+    Official Go plugin. Install with `go install google.golang.org/protobuf/cmd/protoc-gen-go@latest`.
+  </Card>
+  <Card title="protoc-gen-go-grpc" icon="golang">
+    Go gRPC service stubs. Install with `go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest`.
+  </Card>
+  <Card title="grpc_cpp_plugin" icon="code">
+    C++ gRPC service stubs, shipped with gRPC. Invoke via `--grpc_out` with `--plugin=protoc-gen-grpc=$(which grpc_cpp_plugin)`.
+  </Card>
+  <Card title="protoc-gen-validate" icon="shield-check">
+    Field-level validation rules for multiple languages. Part of the `bufbuild/protoc-gen-validate` project.
+  </Card>
+  <Card title="protoc-gen-openapi" icon="file-code">
+    Generates OpenAPI v3 specs from proto service definitions. Part of `google/gnostic`.
+  </Card>
+  <Card title="buf" icon="box">
+    An all-in-one protobuf toolchain that wraps protoc and manages plugins via `buf.gen.yaml` configuration.
+  </Card>
+</CardGroup>
+
+## Plugin security considerations
+
+<Warning>
+Plugins are arbitrary executables run with your user's permissions. Only install plugins from trusted sources. Verify checksums when downloading pre-built plugin binaries.
+</Warning>

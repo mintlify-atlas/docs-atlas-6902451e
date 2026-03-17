@@ -1,0 +1,236 @@
+---
+title: Extensions
+description: Learn how proto extensions let you add fields to a message outside its original definition, including extension ranges, syntax, and proto3 usage.
+---
+
+Extensions let you add fields to a message type from outside its original `.proto` file, without modifying the message definition. They are primarily a proto2 feature, but they are also used in proto3 and editions for custom options.
+
+## What are extensions?
+
+An extension is a field that belongs to a message type but is declared in a different scope — often in a separate `.proto` file. The message type must explicitly reserve a range of field numbers for extensions. Anyone with a valid field number within that range can define an extension field.
+
+Extensions look and behave like regular fields at the wire format level. The encoded bytes are identical to a regular field with the same number and type. The difference is in how the API handles them: extension fields are accessed through dedicated getter and setter methods rather than generated field accessors.
+
+## Declaring extension ranges
+
+A message that allows extensions must declare one or more extension ranges using the `extensions` keyword:
+
+```protobuf
+syntax = "proto2";
+
+message PingRequest {
+  optional string query = 1;
+
+  // Reserve field numbers 100–199 for extensions
+  extensions 100 to 199;
+}
+```
+
+The range bounds are inclusive on the start and exclusive on the end in the wire format, but the `.proto` syntax treats both ends as inclusive. Multiple disjoint ranges are allowed:
+
+```protobuf
+message ExtendableMessage {
+  optional int32 base_field = 1;
+
+  extensions 100 to 199;
+  extensions 1000 to 1999;
+}
+```
+
+Field numbers 1–15 encode in one byte on the wire and should generally be reserved for the most-used regular fields. Extension ranges should typically start at 100 or higher.
+
+<Warning>
+Extension field numbers must not overlap with regular field numbers or other extension ranges within the same message. Overlapping numbers cause undefined behavior.
+</Warning>
+
+## Defining extensions
+
+Extensions are declared using an `extend` block that names the message being extended. The extension fields must use field numbers within the message's declared extension ranges:
+
+```protobuf
+syntax = "proto2";
+
+import "base.proto";  // defines PingRequest with extensions 100 to 199
+
+package myapp;
+
+extend PingRequest {
+  optional string routing_key  = 100;
+  optional bool   debug_mode   = 101;
+  optional int32  priority     = 102;
+}
+```
+
+The `extend` block can appear at the top level of a `.proto` file or inside a message definition:
+
+```protobuf
+message MyExtensions {
+  extend PingRequest {
+    optional string correlation_id = 103;
+  }
+}
+```
+
+When an extension is defined inside a message, it is accessed with the containing message's full name:
+
+```cpp
+// C++: accessing an extension defined inside MyExtensions
+request.GetExtension(MyExtensions::correlation_id);
+```
+
+## Using extensions in C++
+
+Generated C++ code for extensions does not create regular field accessors. Instead, you use `HasExtension`, `GetExtension`, `SetExtension`, `MutableExtension`, and `ClearExtension`:
+
+```cpp
+#include "base.pb.h"
+#include "myapp/extensions.pb.h"
+
+// Set extension fields
+PingRequest request;
+request.SetExtension(myapp::routing_key, "us-east-1");
+request.SetExtension(myapp::debug_mode, true);
+request.SetExtension(myapp::priority, 5);
+
+// Check and get extension fields
+if (request.HasExtension(myapp::routing_key)) {
+  std::string key = request.GetExtension(myapp::routing_key);
+}
+
+// Clear an extension
+request.ClearExtension(myapp::routing_key);
+```
+
+For message-typed extensions, use `MutableExtension` to get a mutable pointer:
+
+```cpp
+extend PingRequest {
+  optional RequestMetadata metadata = 110;
+}
+
+// Setting a message-typed extension
+RequestMetadata* meta = request.MutableExtension(myapp::metadata);
+meta->set_trace_id("abc123");
+```
+
+## Using extensions in Java
+
+In Java, extension fields are accessed through the `ExtensionLite` and `GeneratedExtension` types:
+
+```java
+import myapp.Extensions;
+
+// Building a message with extensions
+PingRequest request = PingRequest.newBuilder()
+    .setExtension(Extensions.routingKey, "us-east-1")
+    .setExtension(Extensions.debugMode, true)
+    .setExtension(Extensions.priority, 5)
+    .build();
+
+// Checking and reading extensions
+if (request.hasExtension(Extensions.routingKey)) {
+    String key = request.getExtension(Extensions.routingKey);
+}
+```
+
+## Using extensions in Python
+
+```python
+import base_pb2
+import myapp.extensions_pb2 as ext
+
+request = base_pb2.PingRequest()
+request.Extensions[ext.routing_key] = "us-east-1"
+request.Extensions[ext.debug_mode] = True
+request.Extensions[ext.priority] = 5
+
+# Check presence
+if request.HasExtension(ext.routing_key):
+    key = request.Extensions[ext.routing_key]
+```
+
+## Extensions vs. regular fields
+
+<AccordionGroup>
+  <Accordion title="Wire format">
+    Extensions are encoded identically to regular fields. A parser that does not know about a particular extension will treat it as an unknown field, preserving the data through serialization round-trips.
+  </Accordion>
+  <Accordion title="API access">
+    Regular fields have generated typed getter and setter methods (`set_foo()`, `foo()`). Extensions require explicit calls to `GetExtension` / `SetExtension` with the extension descriptor as a parameter. This makes the API slightly more verbose.
+  </Accordion>
+  <Accordion title="Ownership">
+    Regular fields are owned by the message type and defined in its `.proto` file. Extensions are owned by the code that defines the `extend` block, which can be in an entirely separate package or binary.
+  </Accordion>
+  <Accordion title="Discovery">
+    You can enumerate all registered extensions of a message type using `DescriptorPool::FindAllExtensions()`. Regular fields are enumerated through `Descriptor::field_count()` and `Descriptor::field()`.
+  </Accordion>
+</AccordionGroup>
+
+## Nested extensions
+
+Extensions can be nested inside message types. This is a common pattern for grouping related extensions and avoiding name collisions at the package level:
+
+```protobuf
+syntax = "proto2";
+
+message SearchOptions {
+  extend google.protobuf.MessageOptions {
+    optional int32 result_limit = 50500;
+  }
+
+  extend google.protobuf.FieldOptions {
+    optional bool  is_searchable = 50501;
+    optional float boost_factor  = 50502;
+  }
+}
+```
+
+```cpp
+// C++ access using the containing message name
+message_opts.GetExtension(SearchOptions::result_limit);
+field_opts.GetExtension(SearchOptions::is_searchable);
+```
+
+## Extensions in proto3 and editions
+
+In `syntax = "proto3"`, regular messages cannot declare extension ranges or have extensions defined on them. Extensions in proto3 are restricted to extending the `*Options` messages from `descriptor.proto`, which is the mechanism that implements [custom options](/advanced/custom-options).
+
+In editions, this restriction is lifted. Any message in an editions file can declare extension ranges and have extensions defined on it — the same as proto2.
+
+```protobuf
+edition = "2023";
+
+// Editions: extension ranges are allowed on any message
+message ExtendableRequest {
+  string query = 1;
+  extensions 100 to 199;
+}
+
+extend ExtendableRequest {
+  string trace_id = 100;
+}
+```
+
+<Note>
+For new designs in editions, consider whether `oneof` or a well-known type like `google.protobuf.Any` better fits your use case. Extensions are primarily useful when you need different teams or packages to independently extend a shared message type.
+</Note>
+
+## Finding extensions at runtime
+
+You can look up all known extensions of a message type using the `DescriptorPool`:
+
+```cpp
+#include "google/protobuf/descriptor.h"
+
+const google::protobuf::Descriptor* desc =
+    PingRequest::descriptor();
+
+std::vector<const google::protobuf::FieldDescriptor*> extensions;
+google::protobuf::DescriptorPool::generated_pool()
+    ->FindAllExtensions(desc, &extensions);
+
+for (const auto* ext : extensions) {
+  std::cout << "Extension: " << ext->full_name()
+            << " number=" << ext->number() << std::endl;
+}
+```

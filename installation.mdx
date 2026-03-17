@@ -1,0 +1,398 @@
+---
+title: Installation
+description: Install the protoc compiler and the protobuf runtime library for your language.
+---
+
+Using Protocol Buffers requires two components:
+
+1. **`protoc`** — the Protocol Buffers compiler, which reads `.proto` files and generates source code.
+2. **A language runtime** — the library your application links against at runtime to serialize and parse messages.
+
+## Install protoc
+
+For most users the simplest approach is to download a pre-built binary.
+
+<Steps>
+  <Step title="Download a pre-built binary">
+    Go to the [protobuf releases page](https://github.com/protocolbuffers/protobuf/releases) and download the zip package for your platform. The file is named `protoc-$VERSION-$PLATFORM.zip` and contains the `protoc` binary plus the standard `.proto` files distributed with protobuf.
+
+    <Tabs>
+      <Tab title="Linux">
+        ```bash
+        # Download the latest release (replace VERSION and ARCH as appropriate)
+        curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v$VERSION/protoc-$VERSION-linux-x86_64.zip
+
+        # Unzip into a local directory
+        unzip protoc-$VERSION-linux-x86_64.zip -d $HOME/.local
+
+        # Ensure the binary is on your PATH
+        export PATH="$PATH:$HOME/.local/bin"
+        ```
+
+        Verify the installation:
+
+        ```bash
+        protoc --version
+        ```
+      </Tab>
+      <Tab title="macOS">
+        Install via Homebrew:
+
+        ```bash
+        brew install protobuf
+        ```
+
+        Or download the pre-built binary manually:
+
+        ```bash
+        # Download the latest release
+        curl -LO https://github.com/protocolbuffers/protobuf/releases/download/v$VERSION/protoc-$VERSION-osx-aarch_64.zip
+
+        # Unzip into a local directory
+        unzip protoc-$VERSION-osx-aarch_64.zip -d $HOME/.local
+
+        export PATH="$PATH:$HOME/.local/bin"
+        ```
+
+        For Intel Macs use `protoc-$VERSION-osx-x86_64.zip`.
+
+        Verify the installation:
+
+        ```bash
+        protoc --version
+        ```
+      </Tab>
+      <Tab title="Windows">
+        Download `protoc-$VERSION-win64.zip` from the [releases page](https://github.com/protocolbuffers/protobuf/releases) and extract it. Add the `bin` directory to your `PATH` environment variable.
+
+        Alternatively, install via `vcpkg`:
+
+        ```bat
+        vcpkg install protobuf protobuf:x64-windows
+        ```
+
+        Verify the installation:
+
+        ```bat
+        protoc --version
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Verify the installation">
+    Run the following command to confirm `protoc` is installed and on your `PATH`:
+
+    ```bash
+    protoc --version
+    # libprotoc 28.x
+    ```
+  </Step>
+</Steps>
+
+<Note>
+If you need to use the latest unreleased version from the main branch, or you are working in C++ and need to build the library as part of your own project, see the [Building from source](#building-from-source) section below.
+</Note>
+
+## Install the language runtime
+
+After installing `protoc`, install the runtime library for your language. Make sure the runtime version matches (or is newer than) your `protoc` version.
+
+<CodeGroup>
+
+```bash Python
+pip install protobuf
+```
+
+```xml Java (Maven)
+<dependency>
+  <groupId>com.google.protobuf</groupId>
+  <artifactId>protobuf-java</artifactId>
+  <version>4.28.2</version>
+</dependency>
+```
+
+```groovy Java (Gradle)
+implementation 'com.google.protobuf:protobuf-java:4.28.2'
+```
+
+```bash C#
+dotnet add package Google.Protobuf
+```
+
+```bash Ruby
+gem install google-protobuf
+```
+
+```json PHP (Composer)
+{
+  "require": {
+    "google/protobuf": "*"
+  }
+}
+```
+
+</CodeGroup>
+
+### Python
+
+The `protobuf` package on PyPI includes both a source distribution and binary wheels. The default backend is the `upb` C extension, which offers the best performance. A pure-Python fallback is available automatically if the C extension cannot be loaded.
+
+```bash
+pip install protobuf
+```
+
+To check which backend is in use:
+
+```python
+from google.protobuf.internal import api_implementation
+print(api_implementation.Type())
+# upb
+```
+
+### Java
+
+Add `protobuf-java` as a dependency. Use the same version number as your `protoc` binary.
+
+<Tabs>
+  <Tab title="Maven">
+    ```xml
+    <dependency>
+      <groupId>com.google.protobuf</groupId>
+      <artifactId>protobuf-java</artifactId>
+      <version>4.28.2</version>
+    </dependency>
+    ```
+
+    To use `JsonFormat` and other utilities, also add:
+
+    ```xml
+    <dependency>
+      <groupId>com.google.protobuf</groupId>
+      <artifactId>protobuf-java-util</artifactId>
+      <version>4.28.2</version>
+    </dependency>
+    ```
+  </Tab>
+  <Tab title="Gradle">
+    ```groovy
+    dependencies {
+        implementation 'com.google.protobuf:protobuf-java:4.28.2'
+    }
+    ```
+  </Tab>
+</Tabs>
+
+<Tip>
+For Android, use the Java Lite runtime instead. It has a smaller code size and works better with ProGuard because it does not rely on Java reflection.
+
+```xml
+<dependency>
+  <groupId>com.google.protobuf</groupId>
+  <artifactId>protobuf-javalite</artifactId>
+  <version>4.28.2</version>
+</dependency>
+```
+</Tip>
+
+### Kotlin
+
+Kotlin protobuf builds on top of the Java runtime. You need both dependencies:
+
+```xml
+<dependency>
+  <groupId>com.google.protobuf</groupId>
+  <artifactId>protobuf-java</artifactId>
+  <version>4.28.2</version>
+</dependency>
+
+<dependency>
+  <groupId>com.google.protobuf</groupId>
+  <artifactId>protobuf-kotlin</artifactId>
+  <version>4.28.2</version>
+</dependency>
+```
+
+Generate both Java and Kotlin sources from your `.proto` files:
+
+```bash
+protoc --java_out=${OUTPUT_DIR} --kotlin_out=${OUTPUT_DIR} path/to/your/proto
+```
+
+### C#
+
+Install the `Google.Protobuf` NuGet package:
+
+```bash
+dotnet add package Google.Protobuf
+```
+
+Or via the Package Manager Console in Visual Studio:
+
+```powershell
+Install-Package Google.Protobuf
+```
+
+To also get a precompiled `protoc.exe` and the standard `.proto` files, install the tools package:
+
+```bash
+dotnet add package Google.Protobuf.Tools
+```
+
+The C# runtime supports .NET 4.5+, .NET Standard 1.1 and 2.0, and .NET 5+.
+
+### Ruby
+
+```bash
+gem install google-protobuf
+```
+
+Or add it to your `Gemfile`:
+
+```ruby
+gem 'google-protobuf'
+```
+
+The gem includes a native C extension for performance. Once installed, generate Ruby code from your `.proto` files using:
+
+```bash
+protoc --ruby_out=. your_schema.proto
+```
+
+### PHP
+
+Add the package via Composer:
+
+```bash
+composer require google/protobuf
+```
+
+Or manually add it to `composer.json`:
+
+```json
+{
+  "require": {
+    "google/protobuf": "*"
+  }
+}
+```
+
+The pure PHP package requires the `bcmath` extension. A native C extension is also available via PECL for higher performance:
+
+```bash
+sudo pecl install protobuf-{VERSION}
+```
+
+## Building from source
+
+Build from source if you need the latest unreleased version, want to modify the compiler, or are integrating protobuf as a C++ library in your own project.
+
+<Steps>
+  <Step title="Install build dependencies">
+    You need Bazel, Git, g++, and Abseil.
+
+    <Tabs>
+      <Tab title="Ubuntu/Debian">
+        ```bash
+        sudo apt-get install g++ git bazel
+        ```
+      </Tab>
+      <Tab title="macOS">
+        Install Xcode command-line tools first:
+
+        ```bash
+        sudo xcode-select --install
+        ```
+
+        Then install Bazel via Homebrew:
+
+        ```bash
+        brew install bazel
+        ```
+      </Tab>
+      <Tab title="Windows">
+        Build using CMake with Visual Studio or Cygwin. See the [CMake build instructions](https://github.com/protocolbuffers/protobuf/blob/main/cmake/README.md) for details.
+
+        Alternatively, use `vcpkg`:
+
+        ```bat
+        vcpkg install protobuf protobuf:x64-windows
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Clone the repository">
+    ```bash
+    git clone https://github.com/protocolbuffers/protobuf.git
+    cd protobuf
+    git submodule update --init --recursive
+    ```
+
+    <Warning>
+    The main branch may be broken between releases. For production use, pin to a release tag (e.g., `git checkout v28.2`).
+    </Warning>
+  </Step>
+
+  <Step title="Build with Bazel">
+    ```bash
+    bazel build :protoc :protobuf
+    ```
+  </Step>
+
+  <Step title="Install the protoc binary">
+    ```bash
+    # Linux/macOS
+    cp bazel-bin/protoc /usr/local/bin
+    ```
+  </Step>
+
+  <Step title="Build with CMake (alternative)">
+    CMake is supported for C++ builds and requires CMake 3.22 or newer.
+
+    ```bash
+    cmake -S . -B build \
+      -DCMAKE_INSTALL_PREFIX=../install \
+      -DCMAKE_BUILD_TYPE=Release
+
+    cmake --build build --parallel 10
+
+    cmake --install build
+    ```
+
+    This installs the `protoc` binary, C++ headers, and linking libraries into the `../install` directory.
+  </Step>
+</Steps>
+
+### Bazel with Bzlmod
+
+If you are using Bazel 8+ with Bzlmod, add the following to your `MODULE.bazel`:
+
+```python
+bazel_dep(name = "protobuf", version = "<VERSION>")
+```
+
+### Bazel with WORKSPACE (legacy)
+
+For legacy WORKSPACE-based builds:
+
+```python
+http_archive(
+    name = "com_google_protobuf",
+    strip_prefix = "protobuf-VERSION",
+    sha256 = ...,
+    url = ...,
+)
+
+load("@com_google_protobuf//:protobuf_deps.bzl", "protobuf_deps")
+protobuf_deps()
+
+load("@rules_java//java:rules_java_deps.bzl", "rules_java_dependencies")
+rules_java_dependencies()
+
+load("@rules_java//java:repositories.bzl", "rules_java_toolchains")
+rules_java_toolchains()
+
+load("@rules_python//python:repositories.bzl", "py_repositories")
+py_repositories()
+```

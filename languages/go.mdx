@@ -1,0 +1,203 @@
+---
+title: Go Guide
+description: Use Protocol Buffers with Go — module setup, code generation, marshaling, and utility functions.
+---
+
+The Go Protocol Buffers module provides generated structs and a runtime API for marshaling, unmarshaling, cloning, and comparing messages.
+
+## Installation
+
+<Steps>
+  <Step title="Add the Go protobuf module">
+    ```bash
+    go get google.golang.org/protobuf
+    ```
+  </Step>
+
+  <Step title="Install the protoc-gen-go plugin">
+    The `protoc-gen-go` plugin generates Go code from `.proto` files. Install it and make sure `$GOPATH/bin` is on your `$PATH`:
+
+    ```bash
+    go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+    ```
+  </Step>
+
+  <Step title="Install protoc">
+    Download the prebuilt `protoc` binary for your platform from the [releases page](https://github.com/protocolbuffers/protobuf/releases/latest).
+  </Step>
+</Steps>
+
+## Generating code
+
+Use `protoc` with `--go_out` and `--go_opt` to generate Go source files. The `go_package` option in your `.proto` file sets the import path:
+
+```protobuf
+// addressbook.proto
+syntax = "proto3";
+package tutorial;
+
+option go_package = "github.com/protocolbuffers/protobuf/examples/go/tutorialpb";
+```
+
+```bash
+protoc --go_out=. --go_opt=paths=source_relative addressbook.proto
+```
+
+This creates `addressbook.pb.go` in the current directory.
+
+## Working with messages
+
+Generated structs have exported fields for each proto field. Use the `proto` package for marshaling:
+
+```go
+package main
+
+import (
+    "log"
+
+    "google.golang.org/protobuf/proto"
+    tutorialpb "github.com/protocolbuffers/protobuf/examples/go/tutorialpb"
+)
+
+func main() {
+    // Create a message
+    person := &tutorialpb.Person{
+        Name:  "Jane Doe",
+        Id:    1234,
+        Email: "jane@example.com",
+        Phones: []*tutorialpb.Person_PhoneNumber{
+            {
+                Number: "+1-555-0100",
+                Type:   tutorialpb.Person_MOBILE,
+            },
+        },
+    }
+
+    // Marshal to bytes
+    data, err := proto.Marshal(person)
+    if err != nil {
+        log.Fatal("marshaling error: ", err)
+    }
+
+    // Unmarshal from bytes
+    newPerson := &tutorialpb.Person{}
+    if err := proto.Unmarshal(data, newPerson); err != nil {
+        log.Fatal("unmarshaling error: ", err)
+    }
+
+    log.Printf("Name: %s", newPerson.GetName())
+}
+```
+
+### Marshaling and unmarshaling
+
+<CodeGroup>
+
+```go marshal to bytes
+import "google.golang.org/protobuf/proto"
+
+data, err := proto.Marshal(msg)
+if err != nil {
+    // handle error
+}
+```
+
+```go unmarshal from bytes
+newMsg := &tutorialpb.Person{}
+if err := proto.Unmarshal(data, newMsg); err != nil {
+    // handle error
+}
+```
+
+```go write to file
+import (
+    "os"
+    "google.golang.org/protobuf/proto"
+)
+
+data, _ := proto.Marshal(msg)
+if err := os.WriteFile("person.bin", data, 0644); err != nil {
+    // handle error
+}
+```
+
+```go read from file
+import (
+    "os"
+    "google.golang.org/protobuf/proto"
+)
+
+data, _ := os.ReadFile("person.bin")
+newMsg := &tutorialpb.Person{}
+if err := proto.Unmarshal(data, newMsg); err != nil {
+    // handle error
+}
+```
+
+</CodeGroup>
+
+## Utility functions
+
+### Clone
+
+Create a deep copy of a message:
+
+```go
+import "google.golang.org/protobuf/proto"
+
+copy := proto.Clone(person).(*tutorialpb.Person)
+```
+
+### Equal
+
+Compare two messages for equality (field-by-field, ignoring unknown fields by default):
+
+```go
+if proto.Equal(person1, person2) {
+    fmt.Println("messages are equal")
+}
+```
+
+### Merge
+
+Merge one message into another (non-zero fields in `src` overwrite fields in `dst`):
+
+```go
+proto.Merge(dst, src)
+```
+
+## JSON support
+
+Use `protojson` for JSON marshaling that conforms to the canonical protobuf JSON mapping:
+
+```go
+import "google.golang.org/protobuf/encoding/protojson"
+
+// Marshal to JSON
+jsonBytes, err := protojson.Marshal(person)
+
+// Unmarshal from JSON
+newPerson := &tutorialpb.Person{}
+err = protojson.Unmarshal(jsonBytes, newPerson)
+```
+
+## Key API reference
+
+<CardGroup cols={2}>
+  <Card title="proto.Marshal / proto.Unmarshal" icon="arrow-right-left">
+    Core binary serialization. `proto.Marshal` returns `[]byte`. `proto.Unmarshal` populates an existing message pointer.
+  </Card>
+  <Card title="proto.Clone" icon="copy">
+    Deep-copies a message. The return type is `proto.Message`; cast to the concrete type as needed.
+  </Card>
+  <Card title="proto.Equal" icon="equals">
+    Reports whether two messages are equal. Extension fields and unknown fields are included in the comparison.
+  </Card>
+  <Card title="protojson" icon="braces">
+    `google.golang.org/protobuf/encoding/protojson` — JSON encoding with canonical field name mapping, `EmitUnpopulated`, and `UseEnumNumbers` options.
+  </Card>
+</CardGroup>
+
+<Info>
+  Use accessor methods like `GetName()` rather than direct struct field access when writing library code. Accessor methods are nil-safe and return the default value for unset fields.
+</Info>

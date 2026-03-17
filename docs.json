@@ -1,122 +1,101 @@
 {
   "$schema": "https://mintlify.com/docs.json",
-  "theme": "mint",
-  "name": "Mint Starter Kit",
+  "name": "Protocol Buffers",
+  "theme": "linden",
   "colors": {
-    "primary": "#16A34A",
-    "light": "#07C983",
-    "dark": "#15803D"
+    "primary": "#d85030",
+    "light": "#2c3538",
+    "dark": "#d1c2c1"
   },
   "favicon": "/favicon.svg",
-  "navigation": {
-    "tabs": [
-      {
-        "tab": "Guides",
-        "groups": [
-          {
-            "group": "Getting started",
-            "pages": [
-              "index",
-              "quickstart",
-              "development"
-            ]
-          },
-          {
-            "group": "Customization",
-            "pages": [
-              "essentials/settings",
-              "essentials/navigation"
-            ]
-          },
-          {
-            "group": "Writing content",
-            "pages": [
-              "essentials/markdown",
-              "essentials/code",
-              "essentials/images",
-              "essentials/reusable-snippets"
-            ]
-          },
-          {
-            "group": "AI tools",
-            "pages": [
-              "ai-tools/cursor",
-              "ai-tools/claude-code",
-              "ai-tools/windsurf"
-            ]
-          }
-        ]
-      },
-      {
-        "tab": "API reference",
-        "groups": [
-          {
-            "group": "API documentation",
-            "pages": [
-              "api-reference/introduction"
-            ]
-          },
-          {
-            "group": "Endpoint examples",
-            "pages": [
-              "api-reference/endpoint/get",
-              "api-reference/endpoint/create",
-              "api-reference/endpoint/delete",
-              "api-reference/endpoint/webhook"
-            ]
-          }
-        ]
-      }
-    ],
-    "global": {
-      "anchors": [
-        {
-          "anchor": "Documentation",
-          "href": "https://mintlify.com/docs",
-          "icon": "book-open-cover"
-        },
-        {
-          "anchor": "Blog",
-          "href": "https://mintlify.com/blog",
-          "icon": "newspaper"
-        }
-      ]
-    }
-  },
-  "logo": {
-    "light": "/logo/light.svg",
-    "dark": "/logo/dark.svg"
-  },
   "navbar": {
-    "links": [
-      {
-        "label": "Support",
-        "href": "mailto:hi@mintlify.com"
-      }
-    ],
     "primary": {
-      "type": "button",
-      "label": "Dashboard",
-      "href": "https://dashboard.mintlify.com"
+      "type": "github",
+      "href": "https://github.com/protocolbuffers/protobuf"
     }
-  },
-  "contextual": {
-    "options": [
-     "copy",
-     "view",
-     "chatgpt",
-     "claude",
-     "perplexity",
-     "mcp",
-     "cursor",
-     "vscode"
-   ]
   },
   "footer": {
     "socials": {
-      "x": "https://x.com/mintlify",
-      "github": "https://github.com/mintlify",
-      "linkedin": "https://linkedin.com/company/mintlify"
+      "github": "https://github.com/protocolbuffers/protobuf"
     }
+  },
+  "navigation": {
+    "tabs": [
+      {
+        "tab": "Documentation",
+        "groups": [
+          {
+            "group": "Get Started",
+            "pages": [
+              "introduction",
+              "quickstart",
+              "installation"
+            ]
+          },
+          {
+            "group": "Core Concepts",
+            "pages": [
+              "concepts/proto-syntax",
+              "concepts/proto3",
+              "concepts/encoding",
+              "concepts/field-types",
+              "concepts/well-known-types"
+            ]
+          },
+          {
+            "group": "Language Guides",
+            "pages": [
+              "languages/cpp",
+              "languages/java",
+              "languages/python",
+              "languages/csharp",
+              "languages/go",
+              "languages/ruby",
+              "languages/php",
+              "languages/rust",
+              "languages/objectivec"
+            ]
+          },
+          {
+            "group": "Advanced Topics",
+            "pages": [
+              "advanced/editions",
+              "advanced/custom-options",
+              "advanced/extensions",
+              "advanced/arena-allocation",
+              "advanced/field-presence",
+              "advanced/reflection"
+            ]
+          },
+          {
+            "group": "Tooling",
+            "pages": [
+              "tooling/protoc",
+              "tooling/plugins",
+              "tooling/bazel",
+              "tooling/cmake"
+            ]
+          },
+          {
+            "group": "Reference",
+            "pages": [
+              "reference/proto3-spec",
+              "reference/encoding",
+              "reference/well-known-types-ref",
+              "reference/extension-registry"
+            ]
+          },
+          {
+            "group": "Resources",
+            "pages": [
+              "resources/examples",
+              "resources/third-party",
+              "resources/version-support",
+              "resources/contributing"
+            ]
+          }
+        ]
+      }
+    ]
   }
 }

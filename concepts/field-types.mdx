@@ -1,0 +1,244 @@
+---
+title: Field types reference
+description: Complete reference for all scalar field types in proto3, including integer variants, floating point, bool, string, bytes, and their mappings to C++, Java, Python, and Go.
+---
+
+Proto3 provides a rich set of scalar types that map to built-in types in each target language. Choosing the right type affects both correctness (e.g., signed vs. unsigned) and encoding efficiency (e.g., variable-length vs. fixed-width).
+
+## Scalar types overview
+
+| Proto type | Wire type | Default | Description |
+|------------|-----------|---------|-------------|
+| `double` | 64-bit (1) | `0` | 64-bit IEEE 754 double precision |
+| `float` | 32-bit (5) | `0` | 32-bit IEEE 754 single precision |
+| `int32` | Varint (0) | `0` | Signed 32-bit integer; variable-length; inefficient for negatives |
+| `int64` | Varint (0) | `0` | Signed 64-bit integer; variable-length; inefficient for negatives |
+| `uint32` | Varint (0) | `0` | Unsigned 32-bit integer; variable-length |
+| `uint64` | Varint (0) | `0` | Unsigned 64-bit integer; variable-length |
+| `sint32` | Varint (0) | `0` | Signed 32-bit; ZigZag encoding; efficient for negatives |
+| `sint64` | Varint (0) | `0` | Signed 64-bit; ZigZag encoding; efficient for negatives |
+| `fixed32` | 32-bit (5) | `0` | Always 4 bytes; unsigned; efficient when values are often > 2²⁸ |
+| `fixed64` | 64-bit (1) | `0` | Always 8 bytes; unsigned; efficient when values are often > 2⁵⁶ |
+| `sfixed32` | 32-bit (5) | `0` | Always 4 bytes; signed |
+| `sfixed64` | 64-bit (1) | `0` | Always 8 bytes; signed |
+| `bool` | Varint (0) | `false` | Boolean; encoded as varint `0` or `1` |
+| `string` | Length-delimited (2) | `""` | UTF-8 or 7-bit ASCII text |
+| `bytes` | Length-delimited (2) | `b""` | Arbitrary binary data |
+
+## Integer types in detail
+
+### `int32` and `int64`
+
+General-purpose signed integers using variable-length varint encoding. Negative values always occupy 10 bytes in the binary format because the sign bit is preserved in the full 64-bit representation.
+
+```protobuf
+message Counter {
+  int32 count = 1;       // efficient for non-negative values
+  int64 large_count = 2; // efficient for non-negative values
+}
+```
+
+### `uint32` and `uint64`
+
+Unsigned integers using varint encoding. Cannot represent negative values — the compiler will reject negative literals.
+
+```protobuf
+message FileInfo {
+  uint32 permissions = 1; // e.g. Unix file permissions
+  uint64 size_bytes = 2;
+}
+```
+
+### `sint32` and `sint64`
+
+Signed integers that use ZigZag encoding. When a field regularly holds negative values, use `sint32` / `sint64` instead of `int32` / `int64` — they encode `-1` as `1`, `-2` as `3`, etc., keeping the encoded size small.
+
+```protobuf
+message TemperatureReading {
+  sint32 celsius = 1; // negative values encoded efficiently
+  sint64 microdelta = 2;
+}
+```
+
+### `fixed32` and `fixed64`
+
+Always encode as exactly 4 or 8 bytes, regardless of value. More efficient than varint for large numbers that are consistently above 2²⁸ (for `fixed32`) or 2⁵⁶ (for `fixed64`).
+
+```protobuf
+message HashDigest {
+  fixed64 hash_hi = 1;
+  fixed64 hash_lo = 2;
+}
+```
+
+### `sfixed32` and `sfixed64`
+
+Like `fixed32` / `fixed64` but interpret the stored bits as a signed two's complement integer.
+
+```protobuf
+message Coordinate {
+  sfixed32 x = 1;
+  sfixed32 y = 2;
+}
+```
+
+## Floating point types
+
+### `float`
+
+IEEE 754 single-precision (32-bit). Always encoded as exactly 4 bytes (wire type 5).
+
+### `double`
+
+IEEE 754 double-precision (64-bit). Always encoded as exactly 8 bytes (wire type 1).
+
+```protobuf
+message Point3D {
+  double x = 1;
+  double y = 2;
+  double z = 3;
+}
+```
+
+<Warning>
+Avoid comparing floats and doubles with `==` in application code — floating-point arithmetic is not exact. In JSON encoding, `NaN`, `Infinity`, and `-Infinity` are represented as the string literals `"NaN"`, `"Infinity"`, and `"-Infinity"`.
+</Warning>
+
+## Boolean type
+
+`bool` is encoded as a varint `0` (false) or `1` (true). In proto3 the default value is `false`.
+
+```protobuf
+message FeatureFlags {
+  bool enable_dark_mode = 1;
+  bool enable_notifications = 2;
+}
+```
+
+## String type
+
+`string` fields must contain valid UTF-8 encoded text or 7-bit ASCII. The content is encoded as a length-delimited byte sequence. The default value is the empty string `""`.
+
+```protobuf
+message Person {
+  string name = 1;
+  string email = 2;
+}
+```
+
+<Note>
+The protobuf runtime validates UTF-8 encoding when reading and writing string fields in most languages. If you need to store arbitrary binary data, use `bytes`.
+</Note>
+
+## Bytes type
+
+`bytes` fields hold arbitrary binary data with no encoding requirements. Like `string`, they use wire type 2. The default value is an empty byte sequence.
+
+```protobuf
+message Image {
+  string mime_type = 1;
+  bytes data = 2;
+}
+```
+
+## Language type mappings
+
+<Tabs>
+  <Tab title="C++">
+    | Proto type | C++ type |
+    |------------|----------|
+    | `double` | `double` |
+    | `float` | `float` |
+    | `int32` | `int32_t` |
+    | `int64` | `int64_t` |
+    | `uint32` | `uint32_t` |
+    | `uint64` | `uint64_t` |
+    | `sint32` | `int32_t` |
+    | `sint64` | `int64_t` |
+    | `fixed32` | `uint32_t` |
+    | `fixed64` | `uint64_t` |
+    | `sfixed32` | `int32_t` |
+    | `sfixed64` | `int64_t` |
+    | `bool` | `bool` |
+    | `string` | `std::string` |
+    | `bytes` | `std::string` |
+  </Tab>
+  <Tab title="Java">
+    | Proto type | Java type | Boxed type |
+    |------------|-----------|------------|
+    | `double` | `double` | `Double` |
+    | `float` | `float` | `Float` |
+    | `int32` | `int` | `Integer` |
+    | `int64` | `long` | `Long` |
+    | `uint32` | `int` | `Integer` |
+    | `uint64` | `long` | `Long` |
+    | `sint32` | `int` | `Integer` |
+    | `sint64` | `long` | `Long` |
+    | `fixed32` | `int` | `Integer` |
+    | `fixed64` | `long` | `Long` |
+    | `sfixed32` | `int` | `Integer` |
+    | `sfixed64` | `long` | `Long` |
+    | `bool` | `boolean` | `Boolean` |
+    | `string` | `String` | `String` |
+    | `bytes` | `ByteString` | `ByteString` |
+
+    <Note>
+    Java `int` and `long` are signed types. Unsigned proto types (`uint32`, `uint64`, `fixed32`, `fixed64`) are treated as their signed Java equivalents — be careful with comparisons.
+    </Note>
+  </Tab>
+  <Tab title="Python">
+    | Proto type | Python type |
+    |------------|-------------|
+    | `double` | `float` |
+    | `float` | `float` |
+    | `int32` | `int` |
+    | `int64` | `int` |
+    | `uint32` | `int` |
+    | `uint64` | `int` |
+    | `sint32` | `int` |
+    | `sint64` | `int` |
+    | `fixed32` | `int` |
+    | `fixed64` | `int` |
+    | `sfixed32` | `int` |
+    | `sfixed64` | `int` |
+    | `bool` | `bool` |
+    | `string` | `str` |
+    | `bytes` | `bytes` |
+  </Tab>
+  <Tab title="Go">
+    | Proto type | Go type |
+    |------------|---------|
+    | `double` | `float64` |
+    | `float` | `float32` |
+    | `int32` | `int32` |
+    | `int64` | `int64` |
+    | `uint32` | `uint32` |
+    | `uint64` | `uint64` |
+    | `sint32` | `int32` |
+    | `sint64` | `int64` |
+    | `fixed32` | `uint32` |
+    | `fixed64` | `uint64` |
+    | `sfixed32` | `int32` |
+    | `sfixed64` | `int64` |
+    | `bool` | `bool` |
+    | `string` | `string` |
+    | `bytes` | `[]byte` |
+  </Tab>
+</Tabs>
+
+## Choosing the right integer type
+
+<AccordionGroup>
+  <Accordion title="When to use int32 / int64">
+    Use `int32` or `int64` for general-purpose signed integers where values are expected to be non-negative or only occasionally negative. Examples: item counts, IDs, page numbers.
+  </Accordion>
+  <Accordion title="When to use sint32 / sint64">
+    Use `sint32` or `sint64` when the field frequently holds negative values, such as temperature readings, financial deltas, or offsets. ZigZag encoding keeps these compact.
+  </Accordion>
+  <Accordion title="When to use uint32 / uint64">
+    Use `uint32` or `uint64` for values that are always non-negative and whose maximum value is important — for example, Unix timestamps in seconds (uint32 until year 2106), port numbers, or bitfields.
+  </Accordion>
+  <Accordion title="When to use fixed32 / fixed64">
+    Use `fixed32` or `fixed64` when values are uniformly large (greater than 2²⁸ for fixed32, 2⁵⁶ for fixed64) and the constant encoding size is preferable — for example, hash values, UUIDs, or cryptographic keys stored as integers.
+  </Accordion>
+</AccordionGroup>

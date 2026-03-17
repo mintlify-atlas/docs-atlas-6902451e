@@ -1,0 +1,698 @@
+---
+title: "Code examples"
+description: "A hands-on address book tutorial showing how to use Protocol Buffers in Python, C++, Java, and Ruby."
+---
+
+The `examples/` directory in the protobuf repository contains a complete address book application that demonstrates the core Protocol Buffers workflow: define a schema, generate code, serialize data, and read it back. The same binary data file is compatible across every language, so you can write an entry with the C++ program and read it with the Python program.
+
+## The address book schema
+
+All examples share a single `addressbook.proto` definition:
+
+```protobuf addressbook.proto
+syntax = "proto3";
+package tutorial;
+
+import "google/protobuf/timestamp.proto";
+
+option java_multiple_files = true;
+option java_package = "com.example.tutorial.protos";
+option java_outer_classname = "AddressBookProtos";
+option csharp_namespace = "Google.Protobuf.Examples.AddressBook";
+option go_package = "github.com/protocolbuffers/protobuf/examples/go/tutorialpb";
+
+message Person {
+  string name = 1;
+  int32 id = 2;  // Unique ID number for this person.
+  string email = 3;
+
+  enum PhoneType {
+    MOBILE = 0;
+    HOME = 1;
+    WORK = 2;
+  }
+
+  message PhoneNumber {
+    string number = 1;
+    PhoneType type = 2;
+  }
+
+  repeated PhoneNumber phones = 4;
+
+  google.protobuf.Timestamp last_updated = 5;
+}
+
+// Our address book file is just one of these.
+message AddressBook {
+  repeated Person people = 1;
+}
+```
+
+The schema uses `proto3` syntax and imports the well-known `Timestamp` type to record when a person's entry was last modified.
+
+## Adding a person
+
+The `add_person` program reads an address book file (creating it if it doesn't exist), prompts for a new person's details, appends the entry, and writes the file back.
+
+<CodeGroup>
+
+```python add_person.py
+#! /usr/bin/env python
+
+import addressbook_pb2
+import sys
+
+try:
+  raw_input          # Python 2
+except NameError:
+  raw_input = input  # Python 3
+
+
+# This function fills in a Person message based on user input.
+def PromptForAddress(person):
+  person.id = int(raw_input("Enter person ID number: "))
+  person.name = raw_input("Enter name: ")
+
+  email = raw_input("Enter email address (blank for none): ")
+  if email != "":
+    person.email = email
+
+  while True:
+    number = raw_input("Enter a phone number (or leave blank to finish): ")
+    if number == "":
+      break
+
+    phone_number = person.phones.add()
+    phone_number.number = number
+
+    type = raw_input("Is this a mobile, home, or work phone? ")
+    if type == "mobile":
+      phone_number.type = addressbook_pb2.Person.MOBILE
+    elif type == "home":
+      phone_number.type = addressbook_pb2.Person.HOME
+    elif type == "work":
+      phone_number.type = addressbook_pb2.Person.WORK
+    else:
+      print("Unknown phone type; leaving as default value.")
+
+
+# Main procedure:  Reads the entire address book from a file,
+#   adds one person based on user input, then writes it back out to the same
+#   file.
+if len(sys.argv) != 2:
+  print("Usage:", sys.argv[0], "ADDRESS_BOOK_FILE")
+  sys.exit(-1)
+
+address_book = addressbook_pb2.AddressBook()
+
+# Read the existing address book.
+try:
+  with open(sys.argv[1], "rb") as f:
+    address_book.ParseFromString(f.read())
+except IOError:
+  print(sys.argv[1] + ": File not found.  Creating a new file.")
+
+# Add an address.
+PromptForAddress(address_book.people.add())
+
+# Write the new address book back to disk.
+with open(sys.argv[1], "wb") as f:
+  f.write(address_book.SerializeToString())
+```
+
+```cpp add_person.cc
+// See README.md for information and build instructions.
+
+#include <ctime>
+#include <fstream>
+#include <google/protobuf/util/time_util.h>
+#include <iostream>
+#include <string>
+
+#include "addressbook.pb.h"
+
+using namespace std;
+
+using google::protobuf::util::TimeUtil;
+
+// This function fills in a Person message based on user input.
+void PromptForAddress(tutorial::Person* person) {
+  cout << "Enter person ID number: ";
+  int id;
+  cin >> id;
+  person->set_id(id);
+  cin.ignore(256, '\n');
+
+  cout << "Enter name: ";
+  getline(cin, *person->mutable_name());
+
+  cout << "Enter email address (blank for none): ";
+  string email;
+  getline(cin, email);
+  if (!email.empty()) {
+    person->set_email(email);
+  }
+
+  while (true) {
+    cout << "Enter a phone number (or leave blank to finish): ";
+    string number;
+    getline(cin, number);
+    if (number.empty()) {
+      break;
+    }
+
+    tutorial::Person::PhoneNumber* phone_number = person->add_phones();
+    phone_number->set_number(number);
+
+    cout << "Is this a mobile, home, or work phone? ";
+    string type;
+    getline(cin, type);
+    if (type == "mobile") {
+      phone_number->set_type(tutorial::Person::MOBILE);
+    } else if (type == "home") {
+      phone_number->set_type(tutorial::Person::HOME);
+    } else if (type == "work") {
+      phone_number->set_type(tutorial::Person::WORK);
+    } else {
+      cout << "Unknown phone type.  Using default." << endl;
+    }
+  }
+  *person->mutable_last_updated() = TimeUtil::SecondsToTimestamp(time(NULL));
+}
+
+// Main function:  Reads the entire address book from a file,
+//   adds one person based on user input, then writes it back out to the same
+//   file.
+int main(int argc, char* argv[]) {
+  GOOGLE_PROTOBUF_VERIFY_VERSION;
+
+  if (argc != 2) {
+    cerr << "Usage:  " << argv[0] << " ADDRESS_BOOK_FILE" << endl;
+    return -1;
+  }
+
+  tutorial::AddressBook address_book;
+
+  {
+    fstream input(argv[1], ios::in | ios::binary);
+    if (!input) {
+      cout << argv[1] << ": File not found.  Creating a new file." << endl;
+    } else if (!address_book.ParseFromIstream(&input)) {
+      cerr << "Failed to parse address book." << endl;
+      return -1;
+    }
+  }
+
+  PromptForAddress(address_book.add_people());
+
+  {
+    fstream output(argv[1], ios::out | ios::trunc | ios::binary);
+    if (!address_book.SerializeToOstream(&output)) {
+      cerr << "Failed to write address book." << endl;
+      return -1;
+    }
+  }
+
+  google::protobuf::ShutdownProtobufLibrary();
+
+  return 0;
+}
+```
+
+```java AddPerson.java
+// See README.md for information and build instructions.
+import com.example.tutorial.protos.AddressBook;
+import com.example.tutorial.protos.Person;
+import com.google.protobuf.util.Timestamps;
+import java.io.BufferedReader;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintStream;
+
+class AddPerson {
+  // This function fills in a Person message based on user input.
+  static Person PromptForAddress(BufferedReader stdin,
+                                 PrintStream stdout) throws IOException {
+    Person.Builder person = Person.newBuilder();
+
+    stdout.print("Enter person ID: ");
+    person.setId(Integer.valueOf(stdin.readLine()));
+
+    stdout.print("Enter name: ");
+    person.setName(stdin.readLine());
+
+    stdout.print("Enter email address (blank for none): ");
+    String email = stdin.readLine();
+    if (email.length() > 0) {
+      person.setEmail(email);
+    }
+
+    while (true) {
+      stdout.print("Enter a phone number (or leave blank to finish): ");
+      String number = stdin.readLine();
+      if (number.length() == 0) {
+        break;
+      }
+
+      Person.PhoneNumber.Builder phoneNumber =
+        Person.PhoneNumber.newBuilder().setNumber(number);
+
+      stdout.print("Is this a mobile, home, or work phone? ");
+      String type = stdin.readLine();
+      if (type.equals("mobile")) {
+        phoneNumber.setType(Person.PhoneType.MOBILE);
+      } else if (type.equals("home")) {
+        phoneNumber.setType(Person.PhoneType.HOME);
+      } else if (type.equals("work")) {
+        phoneNumber.setType(Person.PhoneType.WORK);
+      } else {
+        stdout.println("Unknown phone type.  Using default.");
+      }
+
+      person.addPhones(phoneNumber);
+      person.setLastUpdated(Timestamps.now());
+    }
+
+    return person.build();
+  }
+
+  // Main function:  Reads the entire address book from a file,
+  //   adds one person based on user input, then writes it back out to the same
+  //   file.
+  public static void main(String[] args) throws Exception {
+    if (args.length != 1) {
+      System.err.println("Usage:  AddPerson ADDRESS_BOOK_FILE");
+      System.exit(-1);
+    }
+
+    AddressBook.Builder addressBook = AddressBook.newBuilder();
+
+    try {
+      FileInputStream input = new FileInputStream(args[0]);
+      try {
+        addressBook.mergeFrom(input);
+      } finally {
+        try { input.close(); } catch (Throwable ignore) {}
+      }
+    } catch (FileNotFoundException e) {
+      System.out.println(args[0] + ": File not found.  Creating a new file.");
+    }
+
+    addressBook.addPeople(
+      PromptForAddress(new BufferedReader(new InputStreamReader(System.in)),
+                       System.out));
+
+    FileOutputStream output = new FileOutputStream(args[0]);
+    try {
+      addressBook.build().writeTo(output);
+    } finally {
+      output.close();
+    }
+  }
+}
+```
+
+```ruby add_person.rb
+#! /usr/bin/env ruby
+
+require './addressbook_pb'
+require 'pry'
+
+# creates Person object and fills it with data from user input
+def prompt_for_address()
+  person = Tutorial::Person.newlD()
+
+  puts "Enter person ID number:"
+  person.id = STDIN.gets.chomp.to_i
+  puts "Enter name:"
+  person.name = STDIN.gets.chomp
+
+  puts "Enter email address (blank for none):"
+  email = STDIN.gets.chomp
+
+  if email != ""
+    person.email = email
+  end
+
+  loop do
+    puts "Enter a phone number (or leave blank to finish):"
+    number = STDIN.gets.chomp
+
+    if number == ""
+      break
+    end
+
+    phone_number = Tutorial::Person::PhoneNumber.new(number: number)
+    puts "Is this a mobile, home or work phone?"
+    type = STDIN.gets.chomp
+
+    case type
+    when "mobile"
+      phone_number.type = :MOBILE
+    when "home"
+      phone_number.type = :HOME
+    when "work"
+      phone_number.type = :WORK
+    else
+      puts "Unknown phone type; leaving as default value."
+    end
+    person.phones.push(phone_number)
+  end
+  person
+end
+
+# Main procedure:  Reads the entire address book from a file,
+#   adds one person based on user input, then writes it back out to the same
+#   file.
+if ARGV.length != 1
+  puts "Usage: #{$0} ADDRESS_BOOK_FILE"
+  exit(-1)
+end
+
+address_book = Tutorial::AddressBook.new()
+if File.exist?(ARGV[0])
+  f = File.open(ARGV[0], "rb")
+  address_book = Tutorial::AddressBook.decode(f.read)
+  f.close
+else
+  puts "#{$PROGRAM_NAME}: File not found. Creating new file."
+end
+
+person = prompt_for_address
+
+address_book.people.push(person)
+
+f = File.open(ARGV[0], "wb")
+f.write(Tutorial::AddressBook.encode(address_book))
+f.close
+```
+
+</CodeGroup>
+
+## Listing people
+
+The `list_people` program reads an existing address book file and prints every entry to stdout.
+
+<CodeGroup>
+
+```python list_people.py
+#! /usr/bin/env python
+
+from __future__ import print_function
+import addressbook_pb2
+import sys
+
+
+# Iterates though all people in the AddressBook and prints info about them.
+def ListPeople(address_book):
+  for person in address_book.people:
+    print("Person ID:", person.id)
+    print("  Name:", person.name)
+    if person.email != "":
+      print("  E-mail address:", person.email)
+
+    for phone_number in person.phones:
+      if phone_number.type == addressbook_pb2.Person.MOBILE:
+        print("  Mobile phone #:", end=" ")
+      elif phone_number.type == addressbook_pb2.Person.HOME:
+        print("  Home phone #:", end=" ")
+      elif phone_number.type == addressbook_pb2.Person.WORK:
+        print("  Work phone #:", end=" ")
+      print(phone_number.number)
+
+
+# Main procedure:  Reads the entire address book from a file and prints all
+#   the information inside.
+if len(sys.argv) != 2:
+  print("Usage:", sys.argv[0], "ADDRESS_BOOK_FILE")
+  sys.exit(-1)
+
+address_book = addressbook_pb2.AddressBook()
+
+with open(sys.argv[1], "rb") as f:
+  address_book.ParseFromString(f.read())
+
+ListPeople(address_book)
+```
+
+```cpp list_people.cc
+// See README.md for information and build instructions.
+
+#include <fstream>
+#include <google/protobuf/util/time_util.h>
+#include <iostream>
+#include <string>
+
+#include "addressbook.pb.h"
+
+using namespace std;
+
+using google::protobuf::util::TimeUtil;
+
+// Iterates though all people in the AddressBook and prints info about them.
+void ListPeople(const tutorial::AddressBook& address_book) {
+  for (int i = 0; i < address_book.people_size(); i++) {
+    const tutorial::Person& person = address_book.people(i);
+
+    cout << "Person ID: " << person.id() << endl;
+    cout << "  Name: " << person.name() << endl;
+    if (person.email() != "") {
+      cout << "  E-mail address: " << person.email() << endl;
+    }
+
+    for (int j = 0; j < person.phones_size(); j++) {
+      const tutorial::Person::PhoneNumber& phone_number = person.phones(j);
+
+      switch (phone_number.type()) {
+        case tutorial::Person::MOBILE:
+          cout << "  Mobile phone #: ";
+          break;
+        case tutorial::Person::HOME:
+          cout << "  Home phone #: ";
+          break;
+        case tutorial::Person::WORK:
+          cout << "  Work phone #: ";
+          break;
+        default:
+          cout << "  Unknown phone #: ";
+          break;
+      }
+      cout << phone_number.number() << endl;
+    }
+    if (person.has_last_updated()) {
+      cout << "  Updated: " << TimeUtil::ToString(person.last_updated()) << endl;
+    }
+  }
+}
+
+// Main function:  Reads the entire address book from a file and prints all
+//   the information inside.
+int main(int argc, char* argv[]) {
+  GOOGLE_PROTOBUF_VERIFY_VERSION;
+
+  if (argc != 2) {
+    cerr << "Usage:  " << argv[0] << " ADDRESS_BOOK_FILE" << endl;
+    return -1;
+  }
+
+  tutorial::AddressBook address_book;
+
+  {
+    fstream input(argv[1], ios::in | ios::binary);
+    if (!address_book.ParseFromIstream(&input)) {
+      cerr << "Failed to parse address book." << endl;
+      return -1;
+    }
+  }
+
+  ListPeople(address_book);
+
+  google::protobuf::ShutdownProtobufLibrary();
+
+  return 0;
+}
+```
+
+```java ListPeople.java
+// See README.md for information and build instructions.
+
+import com.example.tutorial.protos.AddressBook;
+import com.example.tutorial.protos.Person;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.PrintStream;
+
+class ListPeople {
+  // Iterates though all people in the AddressBook and prints info about them.
+  static void Print(AddressBook addressBook) {
+    for (Person person: addressBook.getPeopleList()) {
+      System.out.println("Person ID: " + person.getId());
+      System.out.println("  Name: " + person.getName());
+      if (!person.getEmail().isEmpty()) {
+        System.out.println("  E-mail address: " + person.getEmail());
+      }
+
+      for (Person.PhoneNumber phoneNumber : person.getPhonesList()) {
+        switch (phoneNumber.getType()) {
+          case MOBILE:
+            System.out.print("  Mobile phone #: ");
+            break;
+          case HOME:
+            System.out.print("  Home phone #: ");
+            break;
+          case WORK:
+            System.out.print("  Work phone #: ");
+            break;
+          default:
+            System.out.println(" Unknown phone #: ");
+            break;
+        }
+        System.out.println(phoneNumber.getNumber());
+      }
+    }
+  }
+
+  // Main function:  Reads the entire address book from a file and prints all
+  //   the information inside.
+  public static void main(String[] args) throws Exception {
+    if (args.length != 1) {
+      System.err.println("Usage:  ListPeople ADDRESS_BOOK_FILE");
+      System.exit(-1);
+    }
+
+    AddressBook addressBook =
+      AddressBook.parseFrom(new FileInputStream(args[0]));
+
+    Print(addressBook);
+  }
+}
+```
+
+```ruby list_people.rb
+#! /usr/bin/env ruby
+
+require './addressbook_pb'
+require 'pry'
+
+# Iterates though all people in the AddressBook and prints info about them.
+def list_people(address_book)
+  address_book.people.each do |person|
+    puts "Person ID: #{person.id}"
+    puts "  Name: #{person.name}"
+    if person.email != ""
+      puts "  Email: #{person.email}"
+    end
+
+    person.phones.each do |phone_number|
+      type =
+        case phone_number.type
+        when :MOBILE
+          "Mobile phone"
+        when :HOME
+          "Home phone"
+        when :WORK
+          "Work phone"
+        end
+      puts "  #{type} #: #{phone_number.number}"
+    end
+  end
+end
+
+# Main procedure:  Reads the entire address book from a file and prints all
+#   the information inside.
+if ARGV.length != 1
+  puts "Usage: #{$PROGRAM_NAME} ADDRESS_BOOK_FILE"
+  exit(-1)
+end
+
+f = File.open(ARGV[0], "rb")
+address_book = Tutorial::AddressBook.decode(f.read)
+f.close
+
+list_people(address_book)
+```
+
+</CodeGroup>
+
+## Cross-language compatibility
+
+Because all programs encode and decode the same binary wire format, the data files are interoperable:
+
+```bash
+# Write an entry using C++
+./add_person_cpp addressbook.data
+
+# Read it back using Python
+python list_people.py addressbook.data
+
+# Or with Java
+java -cp . ListPeople addressbook.data
+```
+
+## Building the examples
+
+<Tabs>
+  <Tab title="Bazel">
+    Bazel 0.5.4 or newer is required. Download from [bazel's release page](https://github.com/bazelbuild/bazel/releases).
+
+    ```bash
+    # Build all targets in the examples directory
+    bazel build :all
+
+    # Run the C++ binary
+    bazel-bin/add_person_cpp addressbook.data
+    ```
+  </Tab>
+  <Tab title="Make (C++)">
+    Install `protoc` and the C++ runtime first, then:
+
+    ```bash
+    make cpp
+    ./add_person_cpp addressbook.data
+    ./list_people_cpp addressbook.data
+    ```
+  </Tab>
+  <Tab title="Make (Python)">
+    Install `protoc` and the Python runtime (`pip install protobuf`), then:
+
+    ```bash
+    make python
+    ./add_person_python addressbook.data
+    ./list_people_python addressbook.data
+    ```
+
+    <Warning>Make sure the `protobuf` pip package version matches your `protoc` binary version.</Warning>
+  </Tab>
+  <Tab title="Make (Java)">
+    Install `protoc` and download the protobuf Java runtime `.jar` from Maven, then:
+
+    ```bash
+    export CLASSPATH=/path/to/protobuf-java-[version].jar
+    make java
+    ./add_person_java addressbook.data
+    ./list_people_java addressbook.data
+    ```
+  </Tab>
+  <Tab title="Make (Go)">
+    Install `protoc` and the Go plugin:
+
+    ```bash
+    go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+    make go
+    ./add_person_go addressbook.data
+    ./list_people_go addressbook.data
+    ```
+  </Tab>
+  <Tab title="Dart">
+    Install `protoc` and the Dart protoc plugin (ensure `bin/protoc-gen-dart` is on your `PATH`), then:
+
+    ```bash
+    make dart
+    dart add_person.dart addressbook.data
+    dart list_people.dart addressbook.data
+    ```
+  </Tab>
+</Tabs>

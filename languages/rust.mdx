@@ -1,0 +1,177 @@
+---
+title: Rust Guide
+description: Use Protocol Buffers with Rust — Cargo setup, build script code generation, and message serialization.
+---
+
+The Rust Protocol Buffers runtime (version `4.35-dev`) provides the `protobuf` crate for message manipulation and the `protobuf-codegen` crate for generating Rust code from `.proto` files at build time.
+
+## Installation
+
+<Steps>
+  <Step title="Add the runtime dependency">
+    In your `Cargo.toml`, add the `protobuf` crate:
+
+    ```toml
+    [dependencies]
+    protobuf = "4.35"
+    protobuf-well-known-types = "4.35"
+    ```
+  </Step>
+
+  <Step title="Add the codegen build dependency">
+    Code generation is performed in a `build.rs` build script using `protobuf-codegen`:
+
+    ```toml
+    [build-dependencies]
+    protobuf-codegen = "4.35"
+    protobuf-well-known-types = "4.35"
+    ```
+  </Step>
+
+  <Step title="Get a compatible protoc binary">
+    The version of `protoc` must match the `protobuf` crate version you use: if you use Rust protobuf `x.y.z`, use `protoc` version `y.z`. Download a prebuilt binary from the [releases page](https://github.com/protocolbuffers/protobuf/releases) and add it to your `$PATH`.
+  </Step>
+</Steps>
+
+## Generating code
+
+Create a `build.rs` at the root of your crate that runs `protobuf-codegen` during compilation:
+
+```rust
+use protobuf_codegen::CodeGen;
+
+fn main() {
+    CodeGen::new()
+        .inputs(["proto/addressbook.proto"])
+        .include("proto")
+        .dependency(
+            protobuf_well_known_types::get_dependency("protobuf_well_known_types")
+        )
+        .generate_and_compile()
+        .unwrap();
+}
+```
+
+Include the generated code in `main.rs` or `lib.rs`:
+
+```rust
+mod protos {
+    include!(concat!(env!("OUT_DIR"), "/protobuf_generated/addressbook/generated.rs"));
+}
+```
+
+## Working with messages
+
+### Creating messages with the `proto!` macro
+
+The `proto!` macro provides a concise syntax for constructing messages with nested fields:
+
+```rust
+use protobuf::proto;
+use protos::Person;
+
+let person = proto!(Person {
+    name: "Jane Doe",
+    id: 1234,
+    email: "jane@example.com"
+});
+
+println!("{:?}", person);
+```
+
+Nested messages and repeated fields:
+
+```rust
+use protos::Foo;
+
+// Set nested message fields
+let foo = proto!(Foo { name: "foo", bar: __ { name: "bar" } });
+assert_eq!(foo.name(), "foo");
+assert_eq!(foo.bar().name(), "bar");
+
+// Set a repeated field
+let foo = proto!(Foo { int: 42, bar: __ { numbers: [1, 2, 3] } });
+let nums: Vec<_> = foo.bar().numbers().iter().collect();
+assert_eq!(nums, vec![1, 2, 3]);
+```
+
+### Accessing fields
+
+Generated accessor methods are nil-safe and return default values for unset fields:
+
+```rust
+let name: &str = person.name();
+let id: i32 = person.id();
+```
+
+### Serializing and deserializing
+
+<CodeGroup>
+
+```rust serialize to bytes
+use protobuf::Message;
+
+let bytes: Vec<u8> = person.write_to_bytes().expect("serialize failed");
+```
+
+```rust deserialize from bytes
+use protobuf::Message;
+use protos::Person;
+
+let parsed = Person::parse_from_bytes(&bytes).expect("deserialize failed");
+```
+
+```rust write to writer
+use protobuf::Message;
+use std::fs::File;
+
+let mut file = File::create("person.bin").unwrap();
+person.write_to_writer(&mut file).expect("write failed");
+```
+
+```rust read from reader
+use protobuf::Message;
+use std::fs::File;
+use protos::Person;
+
+let mut file = File::open("person.bin").unwrap();
+let parsed = Person::parse_from_reader(&mut file).expect("read failed");
+```
+
+</CodeGroup>
+
+## Well-known types
+
+The `protobuf-well-known-types` crate provides Rust types for `Timestamp`, `Duration`, `Struct`, `Any`, and other standard well-known types:
+
+```rust
+use protobuf_well_known_types::Timestamp;
+use protobuf::proto;
+use protos::Foo;
+
+let foo = proto!(Foo { timestamp: __ { seconds: 1700000000, nanos: 0 } });
+assert_eq!(foo.timestamp().seconds(), 1700000000);
+```
+
+## Version compatibility
+
+<Warning>
+  The `protoc` binary version must match the `protobuf` crate version exactly. If you use Rust protobuf `4.35.x`, use `protoc` at version `35.x`. Mismatched versions will cause build or runtime errors.
+</Warning>
+
+## Key API reference
+
+<CardGroup cols={2}>
+  <Card title="proto! macro" icon="cube">
+    Concise message construction with struct-like syntax. Use `__` for nested message literals. Supports repeated fields via array syntax.
+  </Card>
+  <Card title="Message trait" icon="arrow-right-left">
+    `write_to_bytes()` / `parse_from_bytes(&[u8])` for binary serialization. `write_to_writer(W)` / `parse_from_reader(R)` for streaming I/O.
+  </Card>
+  <Card title="Field accessors" icon="key">
+    Generated `name()`, `id()`, etc. methods return values or references. For optional fields, use `has_field()` to check presence before accessing.
+  </Card>
+  <Card title="protobuf-codegen" icon="wrench">
+    Build-time code generator. Configure via `CodeGen::new().inputs([...]).include("proto").generate_and_compile()`.
+  </Card>
+</CardGroup>

@@ -1,0 +1,197 @@
+---
+title: protoc compiler reference
+description: Complete reference for the Protocol Buffers compiler (protoc), including installation, output flags, import paths, plugin invocation, and descriptor set generation.
+---
+
+`protoc` is the Protocol Buffers compiler. It reads `.proto` files and generates source code in your target language, handling imports, option resolution, and plugin dispatch.
+
+## Installation
+
+See the [installation guide](/installation) for platform-specific instructions. In brief:
+
+- **Pre-built binary**: Download `protoc-$VERSION-$PLATFORM.zip` from the [GitHub releases page](https://github.com/protocolbuffers/protobuf/releases). Each zip contains the `protoc` binary and the standard `.proto` files distributed with protobuf.
+- **Build from source**: Follow the [C++ build instructions](/languages/cpp) to compile protoc from source using Bazel.
+- **Package managers**: On Windows, `vcpkg install protobuf` installs protoc alongside the runtime.
+
+<Note>
+The protoc binary version and the generated code version must match for C++. See the [cross-version runtime guarantee](https://protobuf.dev/support/cross-version-runtime-guarantee/#cpp) for details.
+</Note>
+
+## Basic usage
+
+```bash
+protoc --proto_path=IMPORT_PATH --cpp_out=DST_DIR path/to/file.proto
+```
+
+You can compile multiple `.proto` files in a single invocation:
+
+```bash
+protoc --proto_path=protos --cpp_out=gen \
+  protos/foo/foo.proto \
+  protos/bar/bar.proto
+```
+
+## Output flags
+
+Each `--LANG_out` flag instructs protoc to generate code for that language. Multiple output flags can be combined in a single invocation.
+
+<CodeGroup>
+
+```bash C++
+protoc --proto_path=protos --cpp_out=gen protos/hello.proto
+# Generates: gen/hello.pb.h and gen/hello.pb.cc
+```
+
+```bash Java
+protoc --proto_path=protos --java_out=gen/java protos/hello.proto
+# Generates: gen/java/com/example/Hello.java (package path derived from option java_package)
+```
+
+```bash Python
+protoc --proto_path=protos --python_out=gen/python protos/hello.proto
+# Generates: gen/python/hello_pb2.py
+```
+
+```bash C#
+protoc --proto_path=protos --csharp_out=gen/csharp protos/hello.proto
+# Generates: gen/csharp/Hello.cs
+```
+
+```bash Ruby
+protoc --proto_path=protos --ruby_out=gen/ruby protos/hello.proto
+# Generates: gen/ruby/hello_pb.rb
+```
+
+```bash PHP
+protoc --proto_path=protos --php_out=gen/php protos/hello.proto
+# Generates: gen/php/Hello.php
+```
+
+```bash Objective-C
+protoc --proto_path=protos --objc_out=gen/objc protos/hello.proto
+# Generates: gen/objc/Hello.pbobjc.h and gen/objc/Hello.pbobjc.m
+```
+
+```bash Rust
+protoc --proto_path=protos --rust_out=gen/rust protos/hello.proto
+# Generates: gen/rust/hello.pb.rs
+```
+
+</CodeGroup>
+
+### Passing options to an output flag
+
+Some language generators accept options using the `--LANG_out=OPT=VALUE:DST_DIR` syntax:
+
+```bash
+# Enable gRPC service code for C++
+protoc --proto_path=protos \
+  --cpp_out=gen/cpp \
+  --grpc_out=gen/cpp \
+  --plugin=protoc-gen-grpc=$(which grpc_cpp_plugin) \
+  protos/service.proto
+```
+
+## Import paths
+
+The `--proto_path` flag (short form: `-I`) specifies directories that protoc will search when resolving `import` statements. You can specify multiple import paths:
+
+```bash
+protoc \
+  --proto_path=protos \
+  --proto_path=/usr/local/include \
+  --proto_path=$(GOPATH)/src \
+  --cpp_out=gen \
+  protos/myapp/service.proto
+```
+
+The well-known types (e.g., `google/protobuf/timestamp.proto`) are bundled with the protoc release. If you installed protoc from a zip package, add the `include/` directory inside the zip to your `--proto_path`:
+
+```bash
+protoc \
+  --proto_path=protos \
+  --proto_path=/usr/local/include \
+  --cpp_out=gen \
+  protos/myapp/service.proto
+```
+
+## Plugin invocation
+
+protoc has a plugin system that allows third-party code generators to be invoked as if they were built-in. Any `--xxx_out` flag that does not correspond to a built-in language triggers plugin lookup.
+
+### Plugin discovery
+
+By default, protoc searches `$PATH` for an executable named `protoc-gen-xxx`, where `xxx` matches the flag name:
+
+```bash
+# protoc will look for `protoc-gen-go` on $PATH
+protoc --proto_path=protos --go_out=gen protos/hello.proto
+```
+
+### Explicit plugin path
+
+Use `--plugin` to provide an explicit path instead of relying on `$PATH`:
+
+```bash
+protoc \
+  --proto_path=protos \
+  --plugin=protoc-gen-go=/usr/local/bin/protoc-gen-go \
+  --go_out=gen \
+  protos/hello.proto
+```
+
+See [Plugins](/tooling/plugins) for details on how plugins work and how to write your own.
+
+## Descriptor set output
+
+protoc can serialize the parsed `.proto` files into a binary `FileDescriptorSet` without generating any language-specific code. This is useful for runtime reflection, gRPC service discovery, and tooling.
+
+```bash
+protoc \
+  --proto_path=protos \
+  --descriptor_set_out=myapp.pb \
+  protos/myapp/service.proto
+```
+
+To include all imported files in the descriptor set (not just the files listed on the command line), add `--include_imports`:
+
+```bash
+protoc \
+  --proto_path=protos \
+  --descriptor_set_out=myapp.pb \
+  --include_imports \
+  protos/myapp/service.proto
+```
+
+To include source info (line numbers and comments) in the descriptor set:
+
+```bash
+protoc \
+  --proto_path=protos \
+  --descriptor_set_out=myapp.pb \
+  --include_imports \
+  --include_source_info \
+  protos/myapp/service.proto
+```
+
+## All flags reference
+
+| Flag | Description |
+|------|-------------|
+| `--proto_path=PATH` / `-I PATH` | Add a directory to the import search path. Specify multiple times for multiple paths. |
+| `--cpp_out=DST_DIR` | Generate C++ header and source files. |
+| `--java_out=DST_DIR` | Generate Java source files. |
+| `--python_out=DST_DIR` | Generate Python source files. |
+| `--csharp_out=DST_DIR` | Generate C# source files. |
+| `--ruby_out=DST_DIR` | Generate Ruby source files. |
+| `--php_out=DST_DIR` | Generate PHP source files. |
+| `--objc_out=DST_DIR` | Generate Objective-C source files. |
+| `--rust_out=DST_DIR` | Generate Rust source files. |
+| `--plugin=EXE` | Specify a plugin executable, or `protoc-gen-NAME=PATH` to name it explicitly. |
+| `--descriptor_set_out=FILE` | Write a `FileDescriptorSet` (containing all input files) to the given file. |
+| `--include_imports` | Include all imported files in the `--descriptor_set_out` output. |
+| `--include_source_info` | Include source info (line numbers, comments) in the `--descriptor_set_out` output. |
+| `--encode=MESSAGE_TYPE` | Read a text-format message from stdin and write it in binary to stdout. |
+| `--decode=MESSAGE_TYPE` | Read a binary message from stdin and write it in text format to stdout. |
+| `--version` | Print the protoc version and exit. |
+| `--help` / `-h` | Print usage information. |

@@ -1,97 +1,211 @@
 ---
-title: "Introduction"
-description: "Welcome to the new home for your documentation"
+title: "Protocol Buffers"
+description: "Google's language-neutral, platform-neutral, extensible mechanism for serializing structured data"
+mode: "custom"
 ---
 
-## Setting up
+<div style={{backgroundColor: "#ffffff", minHeight: "100vh"}}>
 
-Get your documentation site up and running in minutes.
+{/* Hero Section */}
+<div style={{background: "linear-gradient(135deg, #d85030 0%, #b03820 100%)", padding: "80px 40px", textAlign: "center", color: "#ffffff"}}>
+  <div style={{maxWidth: "800px", margin: "0 auto"}}>
+    <h1 style={{fontSize: "48px", fontWeight: "700", fontFamily: "Roboto, Arial, sans-serif", marginBottom: "16px", color: "#ffffff"}}>
+      Protocol Buffers
+    </h1>
+    <p style={{fontSize: "20px", lineHeight: "1.6", color: "rgba(255,255,255,0.9)", marginBottom: "32px", fontFamily: "Roboto, Arial, sans-serif"}}>
+      Google's language-neutral, platform-neutral, extensible mechanism for serializing structured data.
+      Smaller, faster, and simpler than XML or JSON.
+    </p>
+    <div style={{display: "flex", gap: "16px", justifyContent: "center", flexWrap: "wrap"}}>
+      <a href="/quickstart" style={{backgroundColor: "#ffffff", color: "#d85030", padding: "12px 28px", borderRadius: "4px", fontWeight: "600", textDecoration: "none", fontFamily: "Roboto, Arial, sans-serif", fontSize: "16px"}}>
+        Get Started
+      </a>
+      <a href="/installation" style={{backgroundColor: "transparent", color: "#ffffff", padding: "12px 28px", borderRadius: "4px", fontWeight: "600", textDecoration: "none", fontFamily: "Roboto, Arial, sans-serif", fontSize: "16px", border: "2px solid rgba(255,255,255,0.7)"}}>
+        Installation
+      </a>
+    </div>
+  </div>
+</div>
 
-<Card
-  title="Start here"
-  icon="rocket"
-  href="/quickstart"
-  horizontal
->
-  Follow our three step quickstart guide.
-</Card>
+{/* Stats Bar */}
+<div style={{backgroundColor: "#2c3538", padding: "24px 40px"}}>
+  <div style={{maxWidth: "900px", margin: "0 auto", display: "flex", justifyContent: "space-around", flexWrap: "wrap", gap: "16px"}}>
+    <div style={{textAlign: "center", color: "#ffffff"}}>
+      <div style={{fontSize: "28px", fontWeight: "700", color: "#d85030"}}>10+</div>
+      <div style={{fontSize: "14px", color: "#d1c2c1"}}>Languages</div>
+    </div>
+    <div style={{textAlign: "center", color: "#ffffff"}}>
+      <div style={{fontSize: "28px", fontWeight: "700", color: "#d85030"}}>3–10x</div>
+      <div style={{fontSize: "14px", color: "#d1c2c1"}}>Smaller than JSON</div>
+    </div>
+    <div style={{textAlign: "center", color: "#ffffff"}}>
+      <div style={{fontSize: "28px", fontWeight: "700", color: "#d85030"}}>70k+</div>
+      <div style={{fontSize: "14px", color: "#d1c2c1"}}>GitHub Stars</div>
+    </div>
+    <div style={{textAlign: "center", color: "#ffffff"}}>
+      <div style={{fontSize: "28px", fontWeight: "700", color: "#d85030"}}>2008</div>
+      <div style={{fontSize: "14px", color: "#d1c2c1"}}>Open Sourced by Google</div>
+    </div>
+  </div>
+</div>
 
-## Make it yours
+{/* Main Content */}
+<div style={{maxWidth: "1100px", margin: "0 auto", padding: "60px 40px"}}>
 
-Design a docs site that looks great and empowers your users.
+  {/* Quick Example */}
+  <div style={{marginBottom: "60px"}}>
+    <h2 style={{fontSize: "28px", fontWeight: "700", fontFamily: "Roboto, Arial, sans-serif", color: "#202124", marginBottom: "12px"}}>
+      Define once, use everywhere
+    </h2>
+    <p style={{color: "#5f6368", fontSize: "16px", marginBottom: "24px", fontFamily: "Roboto, Arial, sans-serif"}}>
+      Write a <code>.proto</code> schema file, then generate type-safe code in any supported language.
+    </p>
 
-<Columns cols={2}>
-  <Card
-    title="Edit locally"
-    icon="pen-to-square"
-    href="/development"
-  >
-    Edit your docs locally and preview them in real time.
-  </Card>
-  <Card
-    title="Customize your site"
-    icon="palette"
-    href="/essentials/settings"
-  >
-    Customize the design and colors of your site to match your brand.
-  </Card>
-    <Card
-    title="Set up navigation"
-    icon="map"
-    href="/essentials/navigation"
-  >
-    Organize your docs to help users find what they need and succeed with your product.
-  </Card>
-  <Card
-    title="API documentation"
-    icon="terminal"
-    href="/api-reference/introduction"
-  >
-    Auto-generate API documentation from OpenAPI specifications.
-  </Card>
-</Columns>
+```protobuf addressbook.proto
+syntax = "proto3";
+package tutorial;
 
-## Create beautiful pages
+import "google/protobuf/timestamp.proto";
 
-Everything you need to create world-class documentation.
+message Person {
+  string name  = 1;
+  int32  id    = 2;
+  string email = 3;
 
-<Columns cols={2}>
-  <Card
-    title="Write with MDX"
-    icon="pen-fancy"
-    href="/essentials/markdown"
-  >
-    Use MDX to style your docs pages.
-  </Card>
-  <Card
-    title="Code samples"
-    icon="code"
-    href="/essentials/code"
-  >
-    Add sample code to demonstrate how to use your product.
-  </Card>
-  <Card
-    title="Images"
-    icon="image"
-    href="/essentials/images"
-  >
-    Display images and other media.
-  </Card>
-  <Card
-    title="Reusable snippets"
-    icon="recycle"
-    href="/essentials/reusable-snippets"
-  >
-    Write once and reuse across your docs.
-  </Card>
-</Columns>
+  enum PhoneType {
+    MOBILE = 0;
+    HOME   = 1;
+    WORK   = 2;
+  }
 
-## Need inspiration?
+  message PhoneNumber {
+    string    number = 1;
+    PhoneType type   = 2;
+  }
 
-<Card
-  title="See complete examples"
-  icon="stars"
-  href="https://mintlify.com/customers"
->
-  Browse our showcase of exceptional documentation sites.
-</Card>
+  repeated PhoneNumber phones       = 4;
+  google.protobuf.Timestamp last_updated = 5;
+}
+
+message AddressBook {
+  repeated Person people = 1;
+}
+```
+
+  </div>
+
+  {/* Feature Cards */}
+  <h2 style={{fontSize: "28px", fontWeight: "700", fontFamily: "Roboto, Arial, sans-serif", color: "#202124", marginBottom: "32px"}}>
+    Why Protocol Buffers?
+  </h2>
+
+  <CardGroup cols={2}>
+    <Card title="Language Neutral" icon="globe">
+      Write your schema once in `.proto` format and generate idiomatic code for C++, Java, Python, Go, C#, Ruby, PHP, Rust, Objective-C, and more.
+    </Card>
+    <Card title="Compact and Fast" icon="bolt">
+      Binary encoding is 3–10x smaller than XML and JSON, with significantly faster serialization and deserialization throughput.
+    </Card>
+    <Card title="Schema Evolution" icon="arrows-rotate">
+      Add new fields without breaking existing code. Old clients ignore unknown fields; new clients handle missing old fields gracefully.
+    </Card>
+    <Card title="Strong Typing" icon="shield-check">
+      Every message field has an explicit type. Generated code gives you compile-time type safety in statically-typed languages.
+    </Card>
+    <Card title="gRPC Integration" icon="network-wired">
+      First-class support for defining RPC service interfaces. Used by Google and thousands of companies for inter-service communication.
+    </Card>
+    <Card title="Extensible" icon="puzzle-piece">
+      Write your own `protoc` plugins to generate custom code. Custom options let you annotate schemas with application-specific metadata.
+    </Card>
+  </CardGroup>
+
+  {/* Language Cards */}
+  <div style={{marginTop: "60px", marginBottom: "60px"}}>
+    <h2 style={{fontSize: "28px", fontWeight: "700", fontFamily: "Roboto, Arial, sans-serif", color: "#202124", marginBottom: "12px"}}>
+      Supported languages
+    </h2>
+    <p style={{color: "#5f6368", fontSize: "16px", marginBottom: "32px", fontFamily: "Roboto, Arial, sans-serif"}}>
+      Official runtimes are available for all major programming languages.
+    </p>
+    <CardGroup cols={3}>
+      <Card title="C++" icon="c" href="/languages/cpp">
+        The reference implementation. Includes the protoc compiler and a high-performance runtime with arena allocation.
+      </Card>
+      <Card title="Java" icon="java" href="/languages/java">
+        Full runtime for JVM including lite variant for Android and Kotlin extensions.
+      </Card>
+      <Card title="Python" icon="python" href="/languages/python">
+        Pure Python and C-extension implementations. Available on PyPI as `protobuf`.
+      </Card>
+      <Card title="C#" icon="hashtag" href="/languages/csharp">
+        .NET runtime published to NuGet as `Google.Protobuf`. Supports .NET Standard 2.0+.
+      </Card>
+      <Card title="Go" icon="code" href="/languages/go">
+        Published at `google.golang.org/protobuf`. Full reflection and gRPC support.
+      </Card>
+      <Card title="Ruby" icon="gem" href="/languages/ruby">
+        Available as the `google-protobuf` gem. Pure Ruby and native extension variants.
+      </Card>
+      <Card title="PHP" icon="php" href="/languages/php">
+        Available via Composer. Supports both pure PHP and C extension implementations.
+      </Card>
+      <Card title="Rust" icon="rust" href="/languages/rust">
+        Published as `protobuf` crate. High-performance with zero-copy parsing support.
+      </Card>
+      <Card title="Objective-C" icon="apple" href="/languages/objectivec">
+        Full runtime for iOS and macOS. Available via CocoaPods as `Protobuf`.
+      </Card>
+    </CardGroup>
+  </div>
+
+  {/* Getting Started Section */}
+  <div style={{backgroundColor: "#f7f7f7", borderRadius: "4px", border: "1px solid #d1d5db", padding: "40px", marginBottom: "60px"}}>
+    <h2 style={{fontSize: "24px", fontWeight: "700", fontFamily: "Roboto, Arial, sans-serif", color: "#202124", marginBottom: "16px"}}>
+      Start in minutes
+    </h2>
+    <p style={{color: "#5f6368", fontSize: "16px", marginBottom: "24px", fontFamily: "Roboto, Arial, sans-serif"}}>
+      Install the compiler, define your schema, and generate code for your language.
+    </p>
+    <CardGroup cols={2}>
+      <Card title="Quickstart" icon="rocket" href="/quickstart">
+        Define your first `.proto` file and generate code in your language of choice.
+      </Card>
+      <Card title="Installation" icon="download" href="/installation">
+        Install `protoc` and your language runtime from pre-built binaries or package managers.
+      </Card>
+      <Card title="Proto3 guide" icon="file-code" href="/concepts/proto3">
+        Learn the proto3 language syntax: messages, fields, enums, services, and imports.
+      </Card>
+      <Card title="Encoding" icon="binary" href="/concepts/encoding">
+        Understand the binary wire format and how protobuf achieves its compact encoding.
+      </Card>
+    </CardGroup>
+  </div>
+
+  {/* Tools Section */}
+  <div style={{marginBottom: "60px"}}>
+    <h2 style={{fontSize: "28px", fontWeight: "700", fontFamily: "Roboto, Arial, sans-serif", color: "#202124", marginBottom: "12px"}}>
+      Tooling
+    </h2>
+    <p style={{color: "#5f6368", fontSize: "16px", marginBottom: "32px", fontFamily: "Roboto, Arial, sans-serif"}}>
+      A rich ecosystem of tools to compile, validate, and integrate your proto schemas.
+    </p>
+    <CardGroup cols={2}>
+      <Card title="protoc" icon="terminal" href="/tooling/protoc">
+        The Protocol Buffer compiler. Transforms `.proto` files into language-specific source code.
+      </Card>
+      <Card title="protoc plugins" icon="plug" href="/tooling/plugins">
+        Extend protoc with custom code generators for any language or framework.
+      </Card>
+      <Card title="Bazel" icon="cube" href="/tooling/bazel">
+        First-class Bazel rules: `proto_library`, `cc_proto_library`, `java_proto_library`, and more.
+      </Card>
+      <Card title="CMake" icon="hammer" href="/tooling/cmake">
+        CMake integration for building the C++ runtime and using protobuf in CMake projects.
+      </Card>
+    </CardGroup>
+  </div>
+
+</div>
+</div>

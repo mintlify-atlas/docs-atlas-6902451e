@@ -1,0 +1,242 @@
+---
+title: Encoding reference
+description: How Protocol Buffers encodes messages on the wire, covering wire types, varint encoding, ZigZag encoding, field tags, and length-delimited fields.
+---
+
+Protocol Buffers uses a compact binary encoding. Understanding the encoding helps with debugging, performance tuning, and interoperability.
+
+## Wire types
+
+Every field in an encoded message is prefixed by a **tag** that encodes both the field number and the wire type. Wire types tell the decoder how many bytes to consume for the value.
+
+| Wire type | Value | Used for |
+|-----------|-------|----------|
+| `VARINT` | 0 | `int32`, `int64`, `uint32`, `uint64`, `sint32`, `sint64`, `bool`, `enum` |
+| `I64` | 1 | `fixed64`, `sfixed64`, `double` |
+| `LEN` | 2 | `string`, `bytes`, embedded messages, packed repeated fields |
+| `SGROUP` | 3 | Group start (deprecated, proto2 only) |
+| `EGROUP` | 4 | Group end (deprecated, proto2 only) |
+| `I32` | 5 | `fixed32`, `sfixed32`, `float` |
+
+## Field tag encoding
+
+The field tag is the first value written for each field. It combines the field number and wire type into a single varint using the formula:
+
+```
+tag = (field_number << 3) | wire_type
+```
+
+**Example:** field number 1, wire type VARINT (0)
+
+```
+tag = (1 << 3) | 0 = 0x08
+```
+
+**Example:** field number 2, wire type LEN (2)
+
+```
+tag = (2 << 3) | 2 = 0x12
+```
+
+## Varint encoding
+
+Varints use one or more bytes to encode an integer. Each byte uses the 7 low-order bits as data. The most significant bit (MSB) of each byte is a **continuation bit**: `1` means more bytes follow, `0` means this is the last byte.
+
+### Single-byte example
+
+Encoding the integer `1`:
+
+```
+value = 1
+binary = 0000 0001
+varint = 0x01  (MSB=0, no more bytes)
+```
+
+### Multi-byte example
+
+Encoding the integer `300`:
+
+```
+value = 300
+binary = 0000 0001 0010 1100
+
+Split into 7-bit groups (from LSB):
+  group 1: 010 1100   -> set MSB to 1: 1010 1100 = 0xAC
+  group 2: 000 0010   -> set MSB to 0: 0000 0010 = 0x02
+
+varint bytes: AC 02
+```
+
+Decoding `AC 02`:
+```
+0xAC = 1010 1100  -> continuation bit=1, data=010 1100
+0x02 = 0000 0010  -> continuation bit=0, data=000 0010
+
+Concatenate data bits (MSB first): 000 0010 | 010 1100
+= 0000 0001 0010 1100
+= 300
+```
+
+### Important: negative int32 values
+
+For `int32` fields with negative values, protobuf always uses 10 bytes. This is because negative 32-bit values are sign-extended to 64-bit before varint encoding. If you expect negative values, use `sint32` or `sint64` instead.
+
+## ZigZag encoding
+
+`sint32` and `sint64` use ZigZag encoding to efficiently represent negative numbers. Standard varint encoding of `-1` (which is `0xFFFFFFFF` in two's complement) would require 10 bytes. ZigZag maps signed integers to unsigned integers so that small negative numbers have small unsigned encodings.
+
+### ZigZag mapping
+
+| Signed original | ZigZag encoded |
+|-----------------|----------------|
+| 0 | 0 |
+| -1 | 1 |
+| 1 | 2 |
+| -2 | 3 |
+| 2 | 4 |
+| -2147483648 | 4294967295 |
+
+### ZigZag formula
+
+For `sint32`:
+```
+encode: (n << 1) ^ (n >> 31)
+decode: (n >>> 1) ^ -(n & 1)
+```
+
+For `sint64`:
+```
+encode: (n << 1) ^ (n >> 63)
+decode: (n >>> 1) ^ -(n & 1)
+```
+
+**Example:** encoding `-1` with ZigZag for `sint32`:
+```
+n = -1 (signed)
+encode: (-1 << 1) ^ (-1 >> 31)
+       = -2 ^ -1
+       = 1  (unsigned varint)
+varint bytes: 0x01  (just one byte!)
+```
+
+## Length-delimited encoding
+
+Wire type `LEN` (2) is used for variable-length data: strings, bytes, embedded messages, and packed repeated fields. The encoding is:
+
+1. The field tag (varint)
+2. The length of the data in bytes (varint)
+3. The raw data bytes
+
+### String example
+
+Field 2, type `string`, value `"testing"`:
+
+```
+Field tag:    (2 << 3) | 2 = 0x12
+Length:       7 bytes      = 0x07
+Data (UTF-8): 74 65 73 74 69 6e 67
+
+Encoded: 12 07 74 65 73 74 69 6e 67
+```
+
+### Embedded message example
+
+Consider this schema:
+
+```protobuf
+message Inner {
+  int32 value = 1;
+}
+
+message Outer {
+  Inner inner = 3;
+}
+```
+
+Encoding `Outer { inner: Inner { value: 150 } }`:
+
+```
+# Inner.value = 150:
+  tag:   (1 << 3) | 0 = 0x08
+  value: 150 (varint) = 0x96 0x01
+  Inner bytes: 08 96 01  (3 bytes)
+
+# Outer.inner (field 3, LEN):
+  tag:    (3 << 3) | 2 = 0x1A
+  length: 3           = 0x03
+  data:   08 96 01
+
+Encoded: 1A 03 08 96 01
+```
+
+## Packed repeated fields
+
+In proto3, repeated scalar fields are packed by default. All values are concatenated without field tags and written as a single length-delimited field.
+
+```protobuf
+message PackedExample {
+  repeated int32 values = 4;
+}
+```
+
+Encoding `{ values: [3, 270, 86942] }`:
+
+```
+# Pack all values as varints:
+  3       = 0x03
+  270     = 0x8E 0x02
+  86942   = 0x9E 0xA7 0x05
+  payload = 03 8E 02 9E A7 05  (6 bytes)
+
+# Field 4, wire type LEN:
+  tag:    (4 << 3) | 2 = 0x22
+  length: 6           = 0x06
+  data:   03 8E 02 9E A7 05
+
+Encoded: 22 06 03 8E 02 9E A7 05
+```
+
+## Fixed-width encoding
+
+Wire type `I32` encodes values in exactly 4 bytes little-endian. Wire type `I64` encodes values in exactly 8 bytes little-endian.
+
+| Proto type | Wire type | Bytes | Notes |
+|------------|-----------|-------|-------|
+| `fixed32` | I32 | 4 | Unsigned; more efficient than `uint32` when values often exceed 2^28. |
+| `sfixed32` | I32 | 4 | Signed; stored as raw 32-bit little-endian. |
+| `float` | I32 | 4 | IEEE 754 single-precision. |
+| `fixed64` | I64 | 8 | Unsigned; more efficient than `uint64` when values often exceed 2^56. |
+| `sfixed64` | I64 | 8 | Signed; stored as raw 64-bit little-endian. |
+| `double` | I64 | 8 | IEEE 754 double-precision. |
+
+## Complete encoding example
+
+Given this message:
+
+```protobuf
+message Person {
+  string name = 1;
+  int32 id = 2;
+  bool active = 3;
+}
+```
+
+Encoding `Person { name: "Alice", id: 42, active: true }`:
+
+```
+# Field 1 (name="Alice"), tag=(1<<3)|2=0x0A, len=5
+  0A 05 41 6C 69 63 65
+
+# Field 2 (id=42), tag=(2<<3)|0=0x10, varint 42=0x2A
+  10 2A
+
+# Field 3 (active=true), tag=(3<<3)|0=0x18, varint true=0x01
+  18 01
+
+Full encoded message (hex):
+  0A 05 41 6C 69 63 65 10 2A 18 01
+```
+
+<Tip>
+Fields with default values (0 for numbers, `false` for bools, `""` for strings) are not encoded on the wire in proto3. A missing field decodes as its default value.
+</Tip>

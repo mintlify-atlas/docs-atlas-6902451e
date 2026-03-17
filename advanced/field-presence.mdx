@@ -1,0 +1,339 @@
+---
+title: Field presence
+description: Understand implicit and explicit presence in proto2 and proto3, how the optional keyword works in proto3, and how presence maps to generated APIs across languages.
+---
+
+Field presence is the notion of whether a protobuf field has a value. There are two different manifestations of presence: *no presence* (implicit), where the generated API stores field values only, and *explicit presence*, where the API also tracks whether a field has been set.
+
+## Background
+
+Historically, proto2 followed explicit presence for all singular fields. Proto3 exposed only no-presence semantics for basic types (numeric, string, bytes, enums), with the exception of message-typed fields and `oneof` members, which always track presence. Since release 3.15, proto3 also supports explicit presence for basic types via the `optional` keyword.
+
+### Presence disciplines
+
+Presence disciplines define how the translation between the API and the serialized wire format works.
+
+**No presence (implicit):**
+- Default values are not serialized onto the wire.
+- Default values are not merged-from during `MergeFrom`.
+- To "clear" a field, set it to its default value.
+- An API user cannot distinguish between "field was set to default" and "field was never set".
+
+**Explicit presence:**
+- Explicitly-set values are always serialized, including default values.
+- Unset fields are never merged-from.
+- Explicitly-set fields — including default values — *are* merged-from.
+- A generated `has_foo()` method indicates whether the field has been set.
+- A generated `clear_foo()` method unsets the field.
+
+## Presence in proto2 APIs
+
+In proto2, all singular fields track presence explicitly. The generated API includes `has_foo()` and `clear_foo()` methods for every singular field:
+
+| Field type | Explicit presence |
+|---|---|
+| Singular numeric (int or float) | Yes |
+| Singular enum | Yes |
+| Singular string or bytes | Yes |
+| Singular message | Yes |
+| Repeated | No |
+| Oneof | Yes |
+| Map | No |
+
+### Oneof fields in proto2
+
+For `oneof` fields, the generated API includes a case method indicating which field (if any) is set:
+
+```protobuf
+syntax = "proto2";
+
+message Response {
+  oneof result {
+    int32 error_code  = 1;
+    string data       = 2;
+  }
+}
+```
+
+The generated code provides:
+- `has_result()` — whether any oneof member is set
+- `result_case()` — which member is currently set
+- `has_error_code()`, `has_data()` — member-level hazzers
+- `clear_result()` — clears the active member
+
+## Presence in proto3 APIs
+
+Without `optional`, proto3 basic-type fields have no presence. Message-typed fields and `oneof` members always track presence:
+
+| Field type | `optional`? | Explicit presence |
+|---|---|---|
+| Singular numeric (int or float) | No | No |
+| Singular enum | No | No |
+| Singular string or bytes | No | No |
+| Singular numeric (int or float) | Yes | Yes |
+| Singular enum | Yes | Yes |
+| Singular string or bytes | Yes | Yes |
+| Singular message | Either | Yes |
+| Repeated | N/A | No |
+| Oneof | N/A | Yes |
+| Map | N/A | No |
+
+## Enabling explicit presence in proto3
+
+To add explicit presence to a proto3 basic-type field, add the `optional` keyword:
+
+```protobuf
+syntax = "proto3";
+package example;
+
+message MyMessage {
+  // No presence: cannot distinguish unset from default
+  int32 not_tracked = 1;
+
+  // Explicit presence: has_tracked() and clear_tracked() are generated
+  optional int32 tracked = 2;
+}
+```
+
+`optional` in proto3 has been enabled by default since protoc v3.15.0. Earlier releases required the `--experimental_allow_proto3_optional` flag.
+
+## Semantic differences
+
+The behavior difference between the two disciplines is visible when the default value is set:
+
+```protobuf
+// No presence
+syntax = "proto3";
+message Msg { int32 foo = 1; }
+
+// Explicit presence
+syntax = "proto3";
+message Msg { optional int32 foo = 1; }
+```
+
+Consider two clients exchanging the same message, where Client A uses explicit presence and Client B uses no presence for the same field `foo`. When Client A sets `foo = 0` (the default value) and sends to Client B, Client B's no-presence implementation will not serialize that default value. When the message returns to Client A, `has_foo()` returns false even though Client A set it. This is a lossy round-trip.
+
+## Generated API examples
+
+<Tabs>
+  <Tab title="C++">
+No presence:
+
+```cpp
+Msg m = GetProto();
+if (m.foo() != 0) {
+  // "Clear" the field:
+  m.set_foo(0);
+} else {
+  // Default value: field may not have been present.
+  m.set_foo(1);
+}
+```
+
+Explicit presence:
+
+```cpp
+Msg m = GetProto();
+if (m.has_foo()) {
+  // Clear the field:
+  m.clear_foo();
+} else {
+  // Field is not present, so set it.
+  m.set_foo(1);
+}
+```
+  </Tab>
+  <Tab title="Java">
+No presence:
+
+```java
+Msg.Builder m = GetProto().toBuilder();
+if (m.getFoo() != 0) {
+  // "Clear" the field:
+  m.setFoo(0);
+} else {
+  // Default value: field may not have been present.
+  m.setFoo(1);
+}
+```
+
+Explicit presence:
+
+```java
+Msg.Builder m = GetProto().toBuilder();
+if (m.hasFoo()) {
+  // Clear the field:
+  m.clearFoo();
+} else {
+  // Field is not present, so set it.
+  m.setFoo(1);
+}
+```
+  </Tab>
+  <Tab title="Python">
+No presence:
+
+```python
+m = example.Msg()
+if m.foo != 0:
+  # "Clear" the field:
+  m.foo = 0
+else:
+  # Default value: field may not have been present.
+  m.foo = 1
+```
+
+Explicit presence:
+
+```python
+m = example.Msg()
+if m.HasField('foo'):
+  # Clear the field:
+  m.ClearField('foo')
+else:
+  # Field is not present, so set it.
+  m.foo = 1
+```
+  </Tab>
+  <Tab title="Go">
+No presence:
+
+```go
+m := GetProto()
+if m.Foo != 0 {
+  // "Clear" the field:
+  m.Foo = 0
+} else {
+  // Default value: field may not have been present.
+  m.Foo = 1
+}
+```
+
+Explicit presence:
+
+```go
+m := GetProto()
+if m.Foo != nil {
+  // Clear the field:
+  m.Foo = nil
+} else {
+  // Field is not present, so set it.
+  m.Foo = proto.Int32(1)
+}
+```
+  </Tab>
+  <Tab title="C#">
+No presence:
+
+```csharp
+var m = GetProto();
+if (m.Foo != 0) {
+  // "Clear" the field:
+  m.Foo = 0;
+} else {
+  // Default value: field may not have been present.
+  m.Foo = 1;
+}
+```
+
+Explicit presence:
+
+```csharp
+var m = GetProto();
+if (m.HasFoo) {
+  // Clear the field:
+  m.ClearFoo();
+} else {
+  // Field is not present, so set it.
+  m.Foo = 1;
+}
+```
+  </Tab>
+  <Tab title="JavaScript">
+No presence:
+
+```js
+var m = new Msg();
+if (m.getFoo() != 0) {
+  // "Clear" the field:
+  m.setFoo(0);
+} else {
+  // Default value: field may not have been present.
+  m.setFoo(1);
+}
+```
+
+Explicit presence:
+
+```js
+var m = new Msg();
+if (m.hasFoo()) {
+  // Clear the field:
+  m.clearFoo();
+} else {
+  // Field is not present, so set it.
+  m.setFoo(1);
+}
+```
+  </Tab>
+  <Tab title="Ruby">
+No presence:
+
+```ruby
+m = Msg.new
+if m.foo != 0
+  # "Clear" the field:
+  m.foo = 0
+else
+  # Default value: field may not have been present.
+  m.foo = 1
+end
+```
+
+Explicit presence:
+
+```ruby
+m = Msg.new
+if m.has_foo?
+  # Clear the field:
+  m.clear_foo
+else
+  # Field is not present, so set it.
+  m.foo = 1
+end
+```
+  </Tab>
+</Tabs>
+
+## Considerations for merging
+
+Under no-presence rules, it is impossible for `MergeFrom` to merge a default value. Default values are skipped, so a patch message cannot represent "set this field to zero". If you need to patch a field to its default value, you must use an external mechanism like `FieldMask`.
+
+Under explicit presence, all explicitly-set values — including defaults — are merged into the target. A field set to zero in a patch message will correctly overwrite the target's non-zero value.
+
+## Considerations for change compatibility
+
+Changing a field between explicit and no presence is binary-compatible at the wire level. However, the serialized representation changes:
+
+- A sender using explicit presence will serialize default values; a receiver using no presence will not preserve them across a round-trip.
+- A sender using no presence will never serialize default values; a receiver using explicit presence will see those fields as absent.
+
+Whether this change is safe depends on your application's semantics. If any consumer depends on knowing whether a field was explicitly set to its default, switching to no presence is a semantic break.
+
+## Presence in editions
+
+Editions replace the `optional` keyword with the `features.field_presence` feature flag:
+
+```protobuf
+edition = "2023";
+
+message Config {
+  // Explicit presence (edition 2023 default)
+  string host = 1;
+
+  // Implicit (no) presence
+  int32 timeout_ms = 2 [features.field_presence = IMPLICIT];
+}
+```
+
+The `optional` keyword is still accepted in editions as a shorthand for `[features.field_presence = EXPLICIT]`. See [proto editions](/advanced/editions) for details on the full feature set.

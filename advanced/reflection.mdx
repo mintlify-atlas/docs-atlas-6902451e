@@ -1,0 +1,363 @@
+---
+title: Reflection API
+description: Use the protobuf reflection API to inspect and manipulate messages, fields, and descriptors at runtime without compile-time knowledge of the message type.
+---
+
+The protobuf reflection API lets you work with messages whose types are not known at compile time. It provides runtime access to descriptors (the schema of a message), field values by name or number, and dynamic message instances. This is the foundation for tools like JSON transcoding, protocol bridges, and schema-driven validation.
+
+## Core classes
+
+<CardGroup cols={2}>
+  <Card title="Descriptor" icon="cube">
+    Describes a message type: its name, fields, oneofs, nested types, enums, and extension ranges.
+  </Card>
+  <Card title="FieldDescriptor" icon="list">
+    Describes a single field: its name, number, type, label (optional/repeated), and options.
+  </Card>
+  <Card title="Reflection" icon="magnifying-glass">
+    Provides runtime get/set access to field values in a specific message instance.
+  </Card>
+  <Card title="DynamicMessageFactory" icon="gear">
+    Creates `Message` instances for a given `Descriptor` without compile-time type knowledge.
+  </Card>
+</CardGroup>
+
+## Descriptor and FieldDescriptor
+
+Every generated message class exposes a `Descriptor` through its static `descriptor()` method or via `GetDescriptor()` on an instance. The `Descriptor` class, defined in `descriptor.h`, provides access to all schema information:
+
+```cpp
+#include "google/protobuf/descriptor.h"
+#include "myproject/messages.pb.h"
+
+const google::protobuf::Descriptor* desc =
+    MyMessage::descriptor();
+
+// Basic metadata
+std::cout << desc->name()      << std::endl;  // e.g. "MyMessage"
+std::cout << desc->full_name() << std::endl;  // e.g. "myproject.MyMessage"
+std::cout << desc->field_count() << std::endl;
+
+// Iterate all fields
+for (int i = 0; i < desc->field_count(); ++i) {
+  const google::protobuf::FieldDescriptor* field = desc->field(i);
+  std::cout << field->name()   << " "    // field name
+            << field->number() << " "    // field tag number
+            << field->type()   << std::endl; // FieldDescriptor::TYPE_*
+}
+
+// Lookup by name or number
+const google::protobuf::FieldDescriptor* f =
+    desc->FindFieldByName("query");
+const google::protobuf::FieldDescriptor* f2 =
+    desc->FindFieldByNumber(1);
+```
+
+### Key Descriptor methods
+
+| Method | Description |
+|---|---|
+| `name()` | Unqualified message name |
+| `full_name()` | Package-qualified name |
+| `field_count()` | Number of fields |
+| `field(int index)` | Field by declaration order |
+| `FindFieldByName(name)` | Field lookup by name |
+| `FindFieldByNumber(number)` | Field lookup by tag number |
+| `FindFieldByLowercaseName(name)` | Case-insensitive lookup |
+| `oneof_decl_count()` | Number of oneof declarations |
+| `real_oneof_decl_count()` | Number of non-synthetic oneofs |
+| `FindOneofByName(name)` | Oneof lookup by name |
+| `nested_type_count()` | Number of nested message types |
+| `FindNestedTypeByName(name)` | Nested type lookup |
+| `enum_type_count()` | Number of enum types in this message |
+| `extension_range_count()` | Number of extension ranges |
+| `IsExtensionNumber(number)` | Whether a number is in an extension range |
+
+### Key FieldDescriptor methods
+
+| Method | Description |
+|---|---|
+| `name()` | Field name |
+| `full_name()` | Fully-qualified field name |
+| `number()` | Field tag number |
+| `type()` | `FieldDescriptor::TYPE_*` constant |
+| `cpp_type()` | `FieldDescriptor::CPPTYPE_*` for use with Reflection |
+| `label()` | `LABEL_OPTIONAL`, `LABEL_REPEATED`, or `LABEL_REQUIRED` |
+| `is_repeated()` | Whether the field is repeated |
+| `containing_type()` | The `Descriptor` of the enclosing message |
+| `message_type()` | For message-typed fields, the field's `Descriptor` |
+| `enum_type()` | For enum-typed fields, the `EnumDescriptor` |
+| `options()` | The `FieldOptions` for this field |
+
+## The Reflection interface
+
+The `Reflection` class provides runtime get/set access to individual fields. You obtain a `Reflection` pointer from a message instance:
+
+```cpp
+#include "google/protobuf/message.h"
+
+MyMessage msg;
+msg.set_query("hello");
+msg.set_page_number(2);
+
+const google::protobuf::Reflection* refl = msg.GetReflection();
+const google::protobuf::Descriptor* desc = msg.GetDescriptor();
+
+// Get a field by name
+const google::protobuf::FieldDescriptor* query_field =
+    desc->FindFieldByName("query");
+
+// Read a string field
+std::string val = refl->GetString(msg, query_field);
+
+// Check presence (for fields with explicit presence)
+if (refl->HasField(msg, query_field)) {
+  std::cout << "query is set: " << val << std::endl;
+}
+
+// Set a field value on a mutable message
+MyMessage* mutable_msg = msg.New();
+const google::protobuf::FieldDescriptor* page_field =
+    desc->FindFieldByNumber(2);
+refl->SetInt32(mutable_msg, page_field, 5);
+```
+
+### Reflection get/set methods by type
+
+The `Reflection` API provides typed methods corresponding to each `CppType`:
+
+```cpp
+// Singular field accessors
+int32_t  GetInt32 (const Message& msg, const FieldDescriptor* field) const;
+int64_t  GetInt64 (const Message& msg, const FieldDescriptor* field) const;
+uint32_t GetUInt32(const Message& msg, const FieldDescriptor* field) const;
+uint64_t GetUInt64(const Message& msg, const FieldDescriptor* field) const;
+float    GetFloat (const Message& msg, const FieldDescriptor* field) const;
+double   GetDouble(const Message& msg, const FieldDescriptor* field) const;
+bool     GetBool  (const Message& msg, const FieldDescriptor* field) const;
+std::string GetString(const Message& msg, const FieldDescriptor* field) const;
+const Message& GetMessage(const Message& msg, const FieldDescriptor* field) const;
+
+// Mutable set methods
+void SetInt32 (Message* msg, const FieldDescriptor* field, int32_t  value) const;
+void SetInt64 (Message* msg, const FieldDescriptor* field, int64_t  value) const;
+void SetString(Message* msg, const FieldDescriptor* field, std::string value) const;
+Message* MutableMessage(Message* msg, const FieldDescriptor* field) const;
+
+// Presence
+bool HasField(const Message& msg, const FieldDescriptor* field) const;
+void ClearField(Message* msg, const FieldDescriptor* field) const;
+```
+
+### Accessing repeated fields
+
+Use `RepeatedFieldRef` and `MutableRepeatedFieldRef` for type-safe access to repeated fields:
+
+```cpp
+#include "google/protobuf/reflection.h"
+
+// Read a repeated int32 field
+const google::protobuf::FieldDescriptor* values_field =
+    desc->FindFieldByName("values");
+
+auto ref = refl->GetRepeatedFieldRef<int32_t>(msg, values_field);
+for (auto it = ref.begin(); it != ref.end(); ++it) {
+  std::cout << *it << std::endl;
+}
+// Or:
+for (int i = 0; i < refl->FieldSize(msg, values_field); ++i) {
+  int32_t v = refl->GetRepeatedInt32(msg, values_field, i);
+}
+
+// Mutate a repeated message field
+auto mutable_ref = refl->GetMutableRepeatedFieldRef<MySubMessage>(
+    &mutable_msg, sub_field);
+MySubMessage item;
+item.set_name("example");
+mutable_ref.Add(item);
+```
+
+The `RepeatedFieldRef<T>` template supports all primitive types and message types. The `CppType`-to-template-parameter mapping is:
+
+| CppType | T for RepeatedFieldRef |
+|---|---|
+| `CPPTYPE_INT32` | `int32_t` |
+| `CPPTYPE_INT64` | `int64_t` |
+| `CPPTYPE_UINT32` | `uint32_t` |
+| `CPPTYPE_UINT64` | `uint64_t` |
+| `CPPTYPE_FLOAT` | `float` |
+| `CPPTYPE_DOUBLE` | `double` |
+| `CPPTYPE_BOOL` | `bool` |
+| `CPPTYPE_STRING` | `std::string` |
+| `CPPTYPE_MESSAGE` | Generated message class or `Message` |
+
+## Dynamic messages
+
+`DynamicMessageFactory` constructs `Message` instances for any `Descriptor`, including those loaded at runtime from binary `FileDescriptorProto` data. This is essential for scenarios like a proxy that processes message types it was not compiled against.
+
+```cpp
+#include "google/protobuf/dynamic_message.h"
+#include "google/protobuf/descriptor.h"
+#include "google/protobuf/descriptor_database.h"
+
+// Build a descriptor from a runtime-loaded FileDescriptorProto
+google::protobuf::DescriptorPool pool;
+const google::protobuf::FileDescriptor* file =
+    pool.BuildFile(file_descriptor_proto);
+const google::protobuf::Descriptor* desc =
+    pool.FindMessageTypeByName("com.example.DynamicMessage");
+
+// Create a factory and get the prototype
+google::protobuf::DynamicMessageFactory factory;
+const google::protobuf::Message* prototype = factory.GetPrototype(desc);
+
+// Allocate a mutable instance
+google::protobuf::Message* msg = prototype->New();
+
+// Use reflection to set fields
+const google::protobuf::Reflection* refl = msg->GetReflection();
+const google::protobuf::FieldDescriptor* name_field =
+    desc->FindFieldByName("name");
+refl->SetString(msg, name_field, "hello");
+
+// Serialize to bytes
+std::string bytes;
+msg->SerializeToString(&bytes);
+
+delete msg;
+```
+
+`DynamicMessageFactory::GetPrototype()` is thread-safe and caches prototypes per descriptor. Calling it twice with the same `Descriptor` returns the same object. Objects created from `prototype->New()` must be destroyed before the factory is destroyed.
+
+<Warning>
+Descriptors used with a `DynamicMessageFactory` must outlive the factory. Do not destroy a `DescriptorPool` while a `DynamicMessageFactory` that references it is still alive.
+</Warning>
+
+### Delegating to generated types
+
+If your `Descriptor` comes from the generated pool (`DescriptorPool::generated_pool()`), you can tell the factory to use the compiled-in generated implementation instead of creating a new dynamic implementation:
+
+```cpp
+google::protobuf::DynamicMessageFactory factory;
+factory.SetDelegateToGeneratedFactory(true);
+
+// For descriptors from generated_pool(), this returns the generated prototype
+const google::protobuf::Message* prototype =
+    factory.GetPrototype(MyMessage::descriptor());
+```
+
+## Reflection in Python
+
+Python's protobuf API uses the `HasField`, `ClearField`, and `ListFields` methods on message instances:
+
+```python
+from myproject import messages_pb2
+
+msg = messages_pb2.MyMessage()
+msg.query = "hello"
+msg.page_number = 2
+
+# List all set fields
+for field_desc, value in msg.ListFields():
+    print(f"{field_desc.name} = {value}")
+
+# Access descriptor
+desc = messages_pb2.MyMessage.DESCRIPTOR
+for field in desc.fields:
+    print(f"{field.name}: {field.type}")
+
+# Check and clear fields
+if msg.HasField("query"):
+    msg.ClearField("query")
+```
+
+For dynamic message creation in Python, use `google.protobuf.message_factory`:
+
+```python
+from google.protobuf import descriptor_pb2
+from google.protobuf import descriptor_pool
+from google.protobuf import message_factory
+
+# Load a FileDescriptorProto and create message classes dynamically
+pool = descriptor_pool.DescriptorPool()
+pool.Add(file_descriptor_proto)
+
+factory = message_factory.MessageFactory(pool=pool)
+MsgClass = factory.GetPrototype(
+    pool.FindMessageTypeByName("com.example.DynamicMessage")
+)
+
+msg = MsgClass()
+msg.name = "hello"
+```
+
+## Reflection in Java
+
+Java exposes reflection through `Descriptors.Descriptor`, `Descriptors.FieldDescriptor`, and the `Message.getField()` / `Message.Builder.setField()` methods:
+
+```java
+import com.google.protobuf.Descriptors;
+import com.google.protobuf.Message;
+
+MyMessage msg = MyMessage.newBuilder()
+    .setQuery("hello")
+    .setPageNumber(2)
+    .build();
+
+// Get descriptor
+Descriptors.Descriptor desc = MyMessage.getDescriptor();
+
+// Iterate fields
+for (Descriptors.FieldDescriptor field : desc.getFields()) {
+    System.out.println(field.getName() + ": " + msg.getField(field));
+}
+
+// Find and use a field by name
+Descriptors.FieldDescriptor queryField = desc.findFieldByName("query");
+Object value = msg.getField(queryField); // returns String for string fields
+
+// Mutate via builder
+Message.Builder builder = msg.toBuilder();
+builder.setField(queryField, "new query");
+MyMessage updated = (MyMessage) builder.build();
+```
+
+For dynamic messages in Java, use `DynamicMessage`:
+
+```java
+import com.google.protobuf.DynamicMessage;
+import com.google.protobuf.Descriptors;
+
+Descriptors.Descriptor desc = /* obtained from a DescriptorPool */;
+
+DynamicMessage.Builder builder = DynamicMessage.newBuilder(desc);
+Descriptors.FieldDescriptor nameField = desc.findFieldByName("name");
+builder.setField(nameField, "hello");
+
+DynamicMessage msg = builder.build();
+System.out.println(msg.getField(nameField));
+```
+
+## DescriptorPool
+
+The `DescriptorPool` holds a collection of file descriptors and resolves cross-file symbol references. The generated code registers itself with `DescriptorPool::generated_pool()` at startup. You can also construct your own pool and populate it at runtime:
+
+```cpp
+#include "google/protobuf/descriptor.h"
+#include "google/protobuf/descriptor_database.h"
+
+// Find a message type by fully-qualified name
+const google::protobuf::Descriptor* desc =
+    google::protobuf::DescriptorPool::generated_pool()
+        ->FindMessageTypeByName("myproject.MyMessage");
+
+// Find all extensions of a message type
+std::vector<const google::protobuf::FieldDescriptor*> extensions;
+google::protobuf::DescriptorPool::generated_pool()
+    ->FindAllExtensions(desc, &extensions);
+
+// Find a service by name
+const google::protobuf::ServiceDescriptor* svc =
+    google::protobuf::DescriptorPool::generated_pool()
+        ->FindServiceByName("myproject.MyService");
+```

@@ -1,0 +1,236 @@
+---
+title: CMake integration
+description: Building and consuming Protocol Buffers with CMake, including find_package, protobuf_generate, and the protobuf_generate function reference.
+---
+
+Protobuf provides full CMake support for both building the runtime from source and consuming protobuf as a dependency in your own project. CMake 3.22 or newer is required.
+
+## Installing protobuf with CMake
+
+To build and install protobuf from source:
+
+```bash
+# Clone the repository
+git clone -b v29.0 https://github.com/protocolbuffers/protobuf.git
+cd protobuf
+
+# Configure (Abseil will be fetched from GitHub if not installed)
+cmake -S . -B build \
+  -DCMAKE_INSTALL_PREFIX=../install \
+  -DCMAKE_BUILD_TYPE=Release
+
+# Compile
+cmake --build build --parallel 10
+
+# Run tests (optional)
+ctest --test-dir build --verbose
+
+# Install
+cmake --install build
+```
+
+This installs into `../install`:
+- `bin/` — the `protoc` binary
+- `include/` — C++ headers and `.proto` files
+- `lib/` — linking libraries and CMake package config files
+
+## CMake configuration flags
+
+| Flag | Default | Description |
+|------|---------|-------------|
+| `CMAKE_BUILD_TYPE` | — | Set to `Release`, `Debug`, `RelWithDebInfo`, or `MinSizeRel`. |
+| `CMAKE_INSTALL_PREFIX` | system default | Install destination directory. |
+| `CMAKE_CXX_STANDARD` | system default | Must be 17 or newer. Use `17` or `20`. |
+| `CMAKE_PREFIX_PATH` | — | Path to pre-installed Abseil and Google Test. |
+| `protobuf_BUILD_TESTS` | `OFF` | Set to `ON` to build unit tests. |
+| `protobuf_BUILD_SHARED_LIBS` | `OFF` | Set to `ON` to build shared libraries (DLLs). |
+| `protobuf_LOCAL_DEPENDENCIES_ONLY` | `OFF` | Set to `ON` to error if a dependency cannot be found locally. |
+| `ZLIB_INCLUDE_DIR` | — | Path to ZLib headers (if installed in a non-standard location). |
+| `ZLIB_LIBRARIES` | — | Path to ZLib library file (if installed in a non-standard location). |
+
+## Consuming protobuf in your project
+
+### find_package
+
+Once protobuf is installed, use `find_package` to locate it:
+
+```cmake
+cmake_minimum_required(VERSION 3.22)
+project(MyApp LANGUAGES CXX)
+
+find_package(protobuf CONFIG REQUIRED)
+
+add_executable(my_app main.cc)
+target_link_libraries(my_app PRIVATE protobuf::libprotobuf)
+```
+
+The available imported targets are:
+
+| Target | Description |
+|--------|-------------|
+| `protobuf::libprotobuf` | The full protobuf runtime library. |
+| `protobuf::libprotobuf-lite` | The lite runtime (no reflection, no text format). |
+| `protobuf::libprotoc` | The protoc compiler library. |
+| `protobuf::protoc` | The `protoc` compiler executable. |
+
+### Generating code with protobuf_generate
+
+The `protobuf_generate` function (from `protobuf-generate.cmake`) automates code generation at build time. It is available in the same directory that calls `find_package(protobuf CONFIG)`.
+
+#### Basic example
+
+Given this directory structure:
+- `proto/helloworld/helloworld.proto`
+- `CMakeLists.txt`
+
+```cmake
+find_package(protobuf CONFIG REQUIRED)
+
+add_library(proto-objects OBJECT
+  "${CMAKE_CURRENT_LIST_DIR}/proto/helloworld/helloworld.proto"
+)
+
+target_link_libraries(proto-objects PUBLIC protobuf::libprotobuf)
+
+set(PROTO_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+
+target_include_directories(proto-objects
+  PUBLIC "$<BUILD_INTERFACE:${PROTO_BINARY_DIR}>"
+)
+
+protobuf_generate(
+  TARGET proto-objects
+  IMPORT_DIRS "${CMAKE_CURRENT_LIST_DIR}/proto"
+  PROTOC_OUT_DIR "${PROTO_BINARY_DIR}"
+)
+```
+
+Building `proto-objects` generates:
+- `${CMAKE_CURRENT_BINARY_DIR}/generated/helloworld/helloworld.pb.h`
+- `${CMAKE_CURRENT_BINARY_DIR}/generated/helloworld/helloworld.pb.cc`
+
+protoc re-runs automatically whenever the `.proto` files change.
+
+#### gRPC example
+
+`protobuf_generate` can invoke plugins like gRPC's `grpc_cpp_plugin`:
+
+```cmake
+find_package(gRPC CONFIG REQUIRED)
+
+add_library(proto-objects OBJECT
+  "${CMAKE_CURRENT_LIST_DIR}/proto/helloworld/helloworld.proto"
+)
+
+target_link_libraries(proto-objects PUBLIC protobuf::libprotobuf gRPC::grpc++)
+
+set(PROTO_BINARY_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+set(PROTO_IMPORT_DIRS "${CMAKE_CURRENT_LIST_DIR}/proto")
+
+target_include_directories(proto-objects
+  PUBLIC "$<BUILD_INTERFACE:${PROTO_BINARY_DIR}>"
+)
+
+# Generate protobuf C++ stubs
+protobuf_generate(
+  TARGET proto-objects
+  IMPORT_DIRS ${PROTO_IMPORT_DIRS}
+  PROTOC_OUT_DIR "${PROTO_BINARY_DIR}"
+)
+
+# Generate gRPC C++ stubs
+protobuf_generate(
+  TARGET proto-objects
+  LANGUAGE grpc
+  GENERATE_EXTENSIONS .grpc.pb.h .grpc.pb.cc
+  PLUGIN "protoc-gen-grpc=$<TARGET_FILE:gRPC::grpc_cpp_plugin>"
+  IMPORT_DIRS ${PROTO_IMPORT_DIRS}
+  PROTOC_OUT_DIR "${PROTO_BINARY_DIR}"
+)
+```
+
+This generates both `helloworld.pb.h/.cc` and `helloworld.grpc.pb.h/.cc`.
+
+## protobuf_generate reference
+
+### Flag arguments
+
+<AccordionGroup>
+  <Accordion title="APPEND_PATH">
+    When set, the base path of each proto schema file is added to `IMPORT_DIRS`. Useful when your `.proto` files do not all share a common import root.
+  </Accordion>
+</AccordionGroup>
+
+### Single-value arguments
+
+| Argument | Description |
+|----------|-------------|
+| `LANGUAGE` | `cpp` or `python`. Determines the kind of source files generated. |
+| `OUT_VAR` | Name of a CMake variable that will be filled with paths to the generated source files. |
+| `EXPORT_MACRO` | Name of a macro applied to all generated protobuf message classes and extern variables (e.g., for DLL exports). |
+| `PROTOC_EXE` | Command, path, or CMake executable used to run protoc. Defaults to `protobuf::protoc`. |
+| `PROTOC_OUT_DIR` | Output directory for generated source files. Defaults to `CMAKE_CURRENT_BINARY_DIR`. |
+| `PLUGIN` | Path to an optional plugin executable (e.g., `grpc_cpp_plugin`). |
+| `PLUGIN_OPTIONS` | Additional options provided to the plugin (e.g., `generate_mock_code=true`). |
+| `DEPENDENCIES` | Arguments forwarded to the `DEPENDS` of the underlying `add_custom_command`. |
+| `TARGET` | CMake target that will have the generated files added as sources. |
+
+### Multi-value arguments
+
+| Argument | Description |
+|----------|-------------|
+| `PROTOS` | List of proto schema files. If omitted, every source file ending in `.proto` of `TARGET` is used. |
+| `IMPORT_DIRS` | A common parent directory for the schema files. The generated file paths are relative to this directory within `PROTOC_OUT_DIR`. |
+| `GENERATE_EXTENSIONS` | Required when `LANGUAGE` is omitted. The file extensions that the plugin generates (e.g., `.grpc.pb.h .grpc.pb.cc`). |
+| `PROTOC_OPTIONS` | Additional arguments forwarded directly to protoc. |
+
+## Unity build note
+
+Protobuf's generated source files are not suited for [jumbo/unity builds](https://cmake.org/cmake/help/latest/prop_tgt/UNITY_BUILD.html). Exclude them:
+
+```cmake
+protobuf_generate(
+  OUT_VAR PROTO_GENERATED_FILES
+  TARGET proto-objects
+  PROTOC_OUT_DIR "${PROTO_BINARY_DIR}"
+)
+
+set_source_files_properties(
+  ${PROTO_GENERATED_FILES}
+  PROPERTIES SKIP_UNITY_BUILD_INCLUSION on
+)
+```
+
+## Platform-specific notes
+
+<AccordionGroup>
+  <Accordion title="Windows">
+    Static linking is strongly recommended on Windows due to Win32 heap issues with DLLs and binary compatibility between MSVC STL versions.
+
+    If you build shared libraries, define `PROTOBUF_USE_DLLS` in your project.
+
+    Open an appropriate Visual Studio command prompt (e.g., *x64 Native Tools Command Prompt for VS 2022*) to ensure `cl.exe` is on `PATH`. Example with the Ninja generator:
+
+    ```bash
+    cmake -S . -B build -G Ninja \
+      -DCMAKE_BUILD_TYPE=Release \
+      -DCMAKE_INSTALL_PREFIX=C:/protobuf
+    cmake --build build
+    cmake --install build
+    ```
+  </Accordion>
+  <Accordion title="Linux">
+    After building, install system-wide with:
+
+    ```bash
+    sudo cmake --install build
+    ```
+  </Accordion>
+  <Accordion title="macOS">
+    CMake will find the Apple Clang compiler automatically. Ensure Xcode command-line tools are installed:
+
+    ```bash
+    xcode-select --install
+    ```
+  </Accordion>
+</AccordionGroup>

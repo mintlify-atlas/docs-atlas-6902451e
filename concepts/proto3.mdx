@@ -1,0 +1,337 @@
+---
+title: Proto3 language guide
+description: Comprehensive reference for the proto3 language — scalar types, field labels, oneof, maps, enums, nested messages, reserved fields, default values, JSON mapping, and services.
+---
+
+Proto3 is the current recommended version of the Protocol Buffers language. Compared to proto2, it simplifies the type system, removes required fields, and makes default values implicit rather than user-defined.
+
+## Scalar value types
+
+Proto3 defines a fixed set of scalar types that map directly to primitive types in each target language.
+
+| Proto type | Default | Notes |
+|------------|---------|-------|
+| `double` | `0` | 64-bit IEEE 754 floating point |
+| `float` | `0` | 32-bit IEEE 754 floating point |
+| `int32` | `0` | Variable-length encoding; inefficient for negative numbers |
+| `int64` | `0` | Variable-length encoding; inefficient for negative numbers |
+| `uint32` | `0` | Variable-length unsigned encoding |
+| `uint64` | `0` | Variable-length unsigned encoding |
+| `sint32` | `0` | ZigZag encoding; efficient for negative numbers |
+| `sint64` | `0` | ZigZag encoding; efficient for negative numbers |
+| `fixed32` | `0` | Always 4 bytes; more efficient than `uint32` for values > 2²⁸ |
+| `fixed64` | `0` | Always 8 bytes; more efficient than `uint64` for values > 2⁵⁶ |
+| `sfixed32` | `0` | Always 4 bytes, signed |
+| `sfixed64` | `0` | Always 8 bytes, signed |
+| `bool` | `false` | |
+| `string` | `""` | Must be UTF-8 encoded or 7-bit ASCII |
+| `bytes` | `b""` | Arbitrary byte sequence |
+
+<Tip>
+Use `sint32` / `sint64` for fields that frequently hold negative values. They use ZigZag encoding which is far more efficient than the standard varint encoding for negative numbers.
+</Tip>
+
+## Message fields and field numbers
+
+Every field in a message has a **type**, a **name**, and a **field number**. Field numbers identify the field in the binary encoding and must be unique within a message.
+
+```protobuf
+message Person {
+  string name = 1;
+  int32 id = 2;
+  string email = 3;
+}
+```
+
+Field numbers `1` to `15` use one byte in the encoding (including the field number and wire type). Field numbers `16` to `2047` use two bytes. Reserve `1` to `15` for the most frequently populated fields.
+
+<Warning>
+Never reuse a field number once data has been written using that number. Reusing field numbers causes silent data corruption when old and new code interact.
+</Warning>
+
+Valid field number ranges:
+- `1` to `536,870,911` (2²⁹ − 1)
+- `19,000` to `19,999` are reserved by the Protocol Buffers implementation and cannot be used
+
+## Field labels
+
+### Singular fields (no label)
+
+In proto3, a field with no label is a singular field. It holds at most one value. If not set, it contains the type's default value.
+
+```protobuf
+message SearchRequest {
+  string query = 1;
+  int32 page_number = 2;
+  int32 results_per_page = 3;
+}
+```
+
+### Optional fields (explicit presence)
+
+Adding the `optional` keyword gives a field *explicit presence* — the generated API tracks whether the field was explicitly set, not just what its value is.
+
+```protobuf
+message Msg {
+  // No presence — default value is indistinguishable from unset
+  int32 not_tracked = 1;
+
+  // Explicit presence — has_foo() / HasFoo tells you if it was set
+  optional int32 tracked = 2;
+}
+```
+
+<Tabs>
+  <Tab title="C++">
+    ```cpp
+    Msg m = GetProto();
+    if (m.has_tracked()) {
+      // Field was explicitly set
+      m.clear_tracked();
+    } else {
+      m.set_tracked(1);
+    }
+    ```
+  </Tab>
+  <Tab title="Go">
+    ```go
+    m := GetProto()
+    if m.Tracked != nil {
+      // Clear the field
+      m.Tracked = nil
+    } else {
+      m.Tracked = proto.Int32(1)
+    }
+    ```
+  </Tab>
+  <Tab title="Java">
+    ```java
+    Msg.Builder m = GetProto().toBuilder();
+    if (m.hasTracked()) {
+      m.clearTracked();
+    } else {
+      m.setTracked(1);
+    }
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    m = example.Msg()
+    if m.HasField('tracked'):
+        m.ClearField('tracked')
+    else:
+        m.tracked = 1
+    ```
+  </Tab>
+</Tabs>
+
+### Repeated fields
+
+A `repeated` field can hold zero or more values, ordered. It maps to a list or array in generated code.
+
+```protobuf
+message AddressBook {
+  repeated Person people = 1;
+}
+```
+
+In proto3, repeated scalar numeric fields use **packed encoding** by default, which is more efficient than the legacy unpacked encoding.
+
+### Map fields
+
+Map fields are a shorthand for an associative container. The key type can be any integral or string type; the value can be any type except another map.
+
+```protobuf
+message PhoneBook {
+  map<string, PhoneNumber> entries = 1;
+}
+```
+
+Map fields cannot be `repeated`. The entry order is not guaranteed.
+
+<Note>
+Map fields in the binary format are represented as a repeated field of an auto-generated entry message, so they are wire-compatible with that representation.
+</Note>
+
+## Oneof fields
+
+A `oneof` declares that at most one field from the group can be set at a time. Setting one field in a `oneof` automatically clears all others.
+
+```protobuf
+message SampleMessage {
+  oneof test_oneof {
+    string name = 4;
+    SubMessage sub_message = 9;
+  }
+}
+```
+
+`oneof` fields support explicit presence — the API exposes which variant (if any) is currently set. `repeated` fields cannot appear inside a `oneof`.
+
+## Enumerations
+
+Enums define a named set of integer constants. The first enumerator must have the value `0`, which serves as the default.
+
+```protobuf
+message Person {
+  enum PhoneType {
+    MOBILE = 0;
+    HOME = 1;
+    WORK = 2;
+  }
+
+  message PhoneNumber {
+    string number = 1;
+    PhoneType type = 2;
+  }
+}
+```
+
+You can assign the same value to multiple enum names using **aliases**. To enable aliases you must set `allow_alias = true`:
+
+```protobuf
+enum Status {
+  option allow_alias = true;
+  UNKNOWN = 0;
+  STARTED = 1;
+  RUNNING = 1;  // alias for STARTED
+}
+```
+
+Enum values out of range of `int32` are not supported. Received unknown enum values are preserved as unknown fields and available via the unknown fields accessor.
+
+## Nested messages
+
+Messages can nest other message and enum definitions. Nested types are referenced using dot notation from outside the enclosing message:
+
+```protobuf
+message Person {
+  message PhoneNumber {
+    string number = 1;
+    PhoneType type = 2;
+  }
+
+  repeated PhoneNumber phones = 4;
+}
+
+// Referencing the nested type from another message:
+message Company {
+  repeated Person.PhoneNumber contact_numbers = 1;
+}
+```
+
+## Reserved fields and names
+
+When you delete a field or rename it, you should mark the old field number and/or name as reserved. This prevents future authors from accidentally reusing them — which would cause silent incompatibilities.
+
+```protobuf
+message Foo {
+  reserved 2, 15, 9 to 11;
+  reserved "foo", "bar";
+}
+```
+
+Field number ranges use `to`: `9 to 11` reserves numbers 9, 10, and 11 inclusive. The keyword `max` can be used for the upper bound: `40 to max`.
+
+<Warning>
+You cannot mix field numbers and names in a single `reserved` statement.
+</Warning>
+
+## Default values in proto3
+
+Unset fields return their type's default value. You cannot specify custom defaults in proto3.
+
+| Type | Default |
+|------|---------|
+| Numeric types | `0` |
+| `bool` | `false` |
+| `string` | Empty string |
+| `bytes` | Empty bytes |
+| Enum | First defined value (`0`) |
+| Message fields | Language-specific null / absent |
+
+Because default values are not serialized, there is no way to distinguish between a field set to its default value and a field that was never set — unless you use the `optional` keyword for explicit presence tracking.
+
+## JSON mapping
+
+Proto3 defines a canonical JSON encoding. The mapping from field names uses **lowerCamelCase** in JSON regardless of the proto field naming style.
+
+| Proto type | JSON encoding |
+|------------|---------------|
+| `message` | Object `{}` |
+| `enum` | String name or integer |
+| `map<K, V>` | Object `{}` |
+| `repeated V` | Array `[]` |
+| `bool` | `true` / `false` |
+| `string` | String |
+| `bytes` | Base64 string |
+| `int32`, `sint32`, `sfixed32` | Number |
+| `int64`, `sint64`, `sfixed64` | String (to avoid JS precision loss) |
+| `float`, `double` | Number; `"NaN"`, `"Infinity"`, `"-Infinity"` |
+
+By default, fields set to their default value are omitted from the JSON output. A serializer may optionally include them.
+
+## Services and RPC methods
+
+<Tabs>
+  <Tab title="Proto definition">
+    ```protobuf
+    service AddressBookService {
+      rpc GetPerson(GetPersonRequest) returns (Person);
+      rpc ListPeople(ListPeopleRequest) returns (stream Person);
+      rpc CreatePerson(CreatePersonRequest) returns (Person);
+      rpc DeletePerson(DeletePersonRequest) returns (google.protobuf.Empty);
+    }
+
+    message GetPersonRequest {
+      int32 id = 1;
+    }
+
+    message ListPeopleRequest {
+      int32 page_size = 1;
+      string page_token = 2;
+    }
+
+    message CreatePersonRequest {
+      Person person = 1;
+    }
+
+    message DeletePersonRequest {
+      int32 id = 1;
+    }
+    ```
+  </Tab>
+  <Tab title="Go generated stub">
+    ```go
+    type AddressBookServiceClient interface {
+        GetPerson(ctx context.Context, in *GetPersonRequest,
+            opts ...grpc.CallOption) (*Person, error)
+        ListPeople(ctx context.Context, in *ListPeopleRequest,
+            opts ...grpc.CallOption) (AddressBookService_ListPeopleClient, error)
+        CreatePerson(ctx context.Context, in *CreatePersonRequest,
+            opts ...grpc.CallOption) (*Person, error)
+        DeletePerson(ctx context.Context, in *DeletePersonRequest,
+            opts ...grpc.CallOption) (*emptypb.Empty, error)
+    }
+    ```
+  </Tab>
+  <Tab title="Java generated stub">
+    ```java
+    public abstract static class AddressBookServiceImplBase
+        implements io.grpc.BindableService {
+
+      public void getPerson(GetPersonRequest request,
+          StreamObserver<Person> responseObserver) { ... }
+
+      public void listPeople(ListPeopleRequest request,
+          StreamObserver<Person> responseObserver) { ... }
+
+      public void createPerson(CreatePersonRequest request,
+          StreamObserver<Person> responseObserver) { ... }
+
+      public void deletePerson(DeletePersonRequest request,
+          StreamObserver<Empty> responseObserver) { ... }
+    }
+    ```
+  </Tab>
+</Tabs>

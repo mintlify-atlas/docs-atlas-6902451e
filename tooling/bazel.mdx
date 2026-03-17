@@ -1,0 +1,211 @@
+---
+title: Bazel integration
+description: Using Protocol Buffers with Bazel, including Bzlmod setup, WORKSPACE setup, proto_library, cc_proto_library, java_proto_library, and py_proto_library rules.
+---
+
+Protobuf provides first-class Bazel support. The protobuf repository itself is built with Bazel, and the provided rules integrate cleanly into any Bazel workspace.
+
+## Setup
+
+<Tabs>
+  <Tab title="Bzlmod (Bazel 8+)">
+    Add a dependency on protobuf in your `MODULE.bazel` file:
+
+    ```python
+    bazel_dep(name = "protobuf", version = "VERSION")
+    ```
+
+    Replace `VERSION` with the desired release version (e.g., `29.0`). Bzlmod resolves the highest compatible version across your module graph.
+
+    If you need to keep the legacy `com_google_protobuf` repo name for compatibility with WORKSPACE-style references:
+
+    ```python
+    bazel_dep(name = "protobuf", version = "VERSION", repo_name = "com_google_protobuf")
+    ```
+  </Tab>
+  <Tab title="WORKSPACE (legacy)">
+    Add the following to your `WORKSPACE` file. Note that as of protobuf 30.x, additional load statements are required to properly set up `rules_java` and `rules_python`:
+
+    ```python
+    http_archive(
+        name = "com_google_protobuf",
+        strip_prefix = "protobuf-VERSION",
+        sha256 = ...,
+        url = ...,
+    )
+
+    load("@com_google_protobuf//:protobuf_deps.bzl", "protobuf_deps")
+
+    protobuf_deps()
+
+    load("@rules_java//java:rules_java_deps.bzl", "rules_java_dependencies")
+
+    rules_java_dependencies()
+
+    load("@rules_java//java:repositories.bzl", "rules_java_toolchains")
+
+    rules_java_toolchains()
+
+    load("@rules_python//python:repositories.bzl", "py_repositories")
+
+    py_repositories()
+    ```
+  </Tab>
+</Tabs>
+
+## Rules
+
+### proto_library
+
+`proto_library` declares a group of `.proto` source files and their dependencies. It does not generate any language-specific code by itself; language rules depend on it.
+
+```python
+load("@protobuf//bazel:proto_library.bzl", "proto_library")
+
+proto_library(
+    name = "person_proto",
+    srcs = ["person.proto"],
+    deps = [
+        "@protobuf//:timestamp_proto",
+    ],
+)
+```
+
+**Key attributes:**
+
+| Attribute | Description |
+|-----------|-------------|
+| `srcs` | List of `.proto` source files. |
+| `deps` | Other `proto_library` targets this library imports. |
+| `strip_import_prefix` | Strip this prefix from the import paths of the `.proto` files in this target. |
+| `import_prefix` | A prefix to add to the import paths of the `.proto` files in this target. |
+| `visibility` | Standard Bazel visibility. |
+
+### cc_proto_library
+
+`cc_proto_library` generates C++ code from a `proto_library` target and compiles it into a C++ library.
+
+```python
+load("@protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+
+cc_proto_library(
+    name = "person_cc_proto",
+    deps = [":person_proto"],
+)
+
+cc_binary(
+    name = "main",
+    srcs = ["main.cc"],
+    deps = [":person_cc_proto"],
+)
+```
+
+### java_proto_library
+
+`java_proto_library` generates Java code from a `proto_library` and compiles it into a Java library.
+
+```python
+load("@protobuf//bazel:java_proto_library.bzl", "java_proto_library")
+load("@rules_java//java:defs.bzl", "java_binary")
+
+java_proto_library(
+    name = "person_java_proto",
+    deps = [":person_proto"],
+)
+
+java_binary(
+    name = "Main",
+    srcs = ["Main.java"],
+    main_class = "com.example.Main",
+    deps = [":person_java_proto"],
+)
+```
+
+### py_proto_library
+
+`py_proto_library` generates Python code from a `proto_library` and exposes it as a Python library.
+
+```python
+load("@protobuf//bazel:py_proto_library.bzl", "py_proto_library")
+load("@rules_python//python:defs.bzl", "py_binary")
+
+py_proto_library(
+    name = "person_py_proto",
+    deps = [":person_proto"],
+)
+
+py_binary(
+    name = "main",
+    srcs = ["main.py"],
+    deps = [":person_py_proto"],
+)
+```
+
+## Complete BUILD.bazel example
+
+The following example shows a single `BUILD.bazel` file that defines proto targets for multiple languages:
+
+```python
+load("@protobuf//bazel:proto_library.bzl", "proto_library")
+load("@protobuf//bazel:cc_proto_library.bzl", "cc_proto_library")
+load("@protobuf//bazel:java_proto_library.bzl", "java_proto_library")
+load("@protobuf//bazel:py_proto_library.bzl", "py_proto_library")
+load("@rules_cc//cc:defs.bzl", "cc_binary")
+load("@rules_java//java:defs.bzl", "java_binary")
+load("@rules_python//python:defs.bzl", "py_binary")
+
+# The canonical proto definition.
+proto_library(
+    name = "addressbook_proto",
+    srcs = ["addressbook.proto"],
+    deps = ["@protobuf//:timestamp_proto"],
+)
+
+# C++ target
+cc_proto_library(
+    name = "addressbook_cc_proto",
+    deps = [":addressbook_proto"],
+)
+
+# Java target
+java_proto_library(
+    name = "addressbook_java_proto",
+    deps = [":addressbook_proto"],
+)
+
+# Python target
+py_proto_library(
+    name = "addressbook_py_proto",
+    deps = [":addressbook_proto"],
+)
+
+# An example binary that uses the C++ generated code.
+cc_binary(
+    name = "add_person",
+    srcs = ["add_person.cc"],
+    deps = [
+        ":addressbook_cc_proto",
+        "@abseil-cpp//absl/log",
+    ],
+)
+```
+
+## Building from source
+
+To build the protoc binary and the C++ runtime directly from the protobuf source tree:
+
+```bash
+git clone https://github.com/protocolbuffers/protobuf.git
+cd protobuf
+git submodule update --init --recursive
+
+bazel build :protoc :protobuf
+
+# Install protoc system-wide (Linux/macOS)
+cp bazel-bin/protoc /usr/local/bin
+```
+
+<Note>
+Protobuf supports Bzlmod with Bazel 8 and newer. The legacy WORKSPACE system is still supported but will eventually be deprecated by Bazel.
+</Note>

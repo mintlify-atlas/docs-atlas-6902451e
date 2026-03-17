@@ -1,0 +1,257 @@
+---
+title: Proto Editions
+description: Understand the proto editions system, how it replaces proto2/proto3 syntax declarations, and how to configure features granularly with edition 2023.
+---
+
+Proto editions replace the `syntax = "proto2"` and `syntax = "proto3"` declarations with an incremental, feature-based versioning system. Instead of choosing between two syntaxes with fixed semantics, you configure individual behaviors through feature flags while keeping all messages interoperable.
+
+## What are editions?
+
+Historically, protobuf supported two syntaxes with fixed, divergent semantics. Proto2 had explicit presence, closed enums, and extensions. Proto3 had implicit presence, open enums, and required a zero-valued first enum entry. Migrating between the two required wholesale file rewrites, and some behaviors from one syntax were unavailable in the other.
+
+Editions replace this model. A `.proto` file using editions begins with an `edition` declaration:
+
+```protobuf
+edition = "2023";
+
+package example;
+
+message SearchRequest {
+  string query = 1;
+  int32 page_number = 2;
+}
+```
+
+Editions are year-numbered. The `edition` keyword implies `syntax = "editions"`, and the `syntax` keyword is deprecated for edition-based files. Protoc rejects files that reference an edition it does not understand.
+
+## How editions differ from proto2/proto3
+
+With `syntax = "proto2"` or `syntax = "proto3"`, you got a fixed bundle of behaviors. Editions separate those behaviors into individual feature flags. Each feature has a default value for every edition, and you can override it at the file, message, or field level.
+
+The following table summarizes the key semantic differences and their edition equivalents:
+
+| Behavior | proto2 | proto3 | Edition 2023 default |
+|---|---|---|---|
+| Field presence | Explicit | Implicit (no `optional`) | `EXPLICIT` |
+| Enum type | Closed | Open | `OPEN` |
+| Repeated field encoding | Expanded | Packed | `PACKED` |
+| String validation | Variable | Mandatory UTF-8 | `MANDATORY` |
+| Message encoding | Length-prefixed or group | Length-prefixed | `LENGTH_PREFIXED` |
+| JSON handling | Best-effort | Required valid mapping | `ALLOW` |
+
+Critically, messages with any combination of features are always interoperable — editions do not split the ecosystem.
+
+## Edition 2023 features
+
+Edition 2023 is the first published edition. It defines the following core features in the `Features` message within `descriptor.proto`:
+
+### `features.field_presence`
+
+Controls whether the generated API tracks whether a singular field has been explicitly set.
+
+- `EXPLICIT` — the field has explicit presence. `has_foo()` and `clear_foo()` methods are generated. Default values are serialized when set.
+- `IMPLICIT` — the field has no presence. The default value is not serialized. No `has_foo()` method is generated.
+- `LEGACY_REQUIRED` — the field is wire-required. Used when migrating proto2 `required` fields.
+
+```protobuf
+edition = "2023";
+
+message UserProfile {
+  // Explicit presence (default): has_name() and clear_name() are generated
+  string name = 1;
+
+  // Implicit presence: behaves like proto3 implicit field
+  int32 view_count = 2 [features.field_presence = IMPLICIT];
+}
+```
+
+### `features.enum_type`
+
+Controls how unknown enum values are handled during parsing.
+
+- `OPEN` (default) — unknown values are stored in the field directly as integers.
+- `CLOSED` — unknown values are stored in the unknown field set.
+
+```protobuf
+edition = "2023";
+
+// Closed enum: out-of-range values go to unknown fields
+enum Status {
+  option features.enum_type = CLOSED;
+  STATUS_UNKNOWN = 0;
+  STATUS_ACTIVE = 1;
+  STATUS_INACTIVE = 2;
+}
+```
+
+### `features.repeated_field_encoding`
+
+Controls the wire encoding for repeated scalar fields.
+
+- `PACKED` (default) — uses packed encoding for repeated numeric fields.
+- `EXPANDED` — uses the older tag-per-element encoding.
+
+```protobuf
+edition = "2023";
+
+message DataPoints {
+  // Packed encoding (default)
+  repeated int32 values = 1;
+
+  // Expanded encoding for compatibility
+  repeated int32 legacy_values = 2 [features.repeated_field_encoding = EXPANDED];
+}
+```
+
+### `features.message_encoding`
+
+Controls the wire type used for message-typed fields.
+
+- `LENGTH_PREFIXED` (default) — standard wire type 2 encoding.
+- `DELIMITED` — group-style encoding (wire types 3/4), the replacement for proto2 `group` syntax.
+
+```protobuf
+edition = "2023";
+
+message Outer {
+  message Inner {
+    int32 x = 1;
+  }
+  // Delimited encoding replaces proto2 group syntax
+  Inner data = 1 [features.message_encoding = DELIMITED];
+}
+```
+
+### `features.json_format`
+
+- `ALLOW` (default) — the runtime must support JSON parsing and serialization. Proto-level checks ensure a well-defined JSON mapping.
+- `LEGACY_BEST_EFFORT` — used for proto2 files that have undefined JSON mappings.
+
+## Feature inheritance
+
+Features propagate from parent scopes to child scopes. A feature set at the file level applies to all messages, enums, and fields within the file, unless overridden at a narrower scope.
+
+```protobuf
+edition = "2023";
+
+// All fields in this file default to IMPLICIT presence
+option features.field_presence = IMPLICIT;
+
+message Config {
+  string host = 1;  // IMPLICIT presence (inherited)
+
+  // Override at field level: this field has explicit presence
+  optional int32 port = 2 [features.field_presence = EXPLICIT];
+}
+```
+
+<Note>
+The `optional` keyword is accepted in editions as a syntactic shorthand for `[features.field_presence = EXPLICIT]`. It is not required; presence is controlled entirely by the feature flag.
+</Note>
+
+## Migrating from proto2 and proto3
+
+Any proto2 or proto3 file can be mechanically migrated to editions without semantic changes. The migration adds explicit feature flags where the file's old behavior differed from the edition 2023 defaults.
+
+<Tabs>
+  <Tab title="proto2 original">
+```protobuf
+syntax = "proto2";
+
+message Foo {
+  required int32 x = 1;
+  optional int32 y = 2;
+  repeated int32 z = 3;
+}
+
+enum Status {
+  UNKNOWN = 0;
+  ACTIVE = 1;
+}
+```
+  </Tab>
+  <Tab title="Editions equivalent">
+```protobuf
+edition = "2023";
+
+// proto2 repeated fields were expanded by default
+option features.repeated_field_encoding = EXPANDED;
+
+message Foo {
+  int32 x = 1 [features.field_presence = LEGACY_REQUIRED];
+  int32 y = 2;  // EXPLICIT is the edition 2023 default
+  repeated int32 z = 3;
+}
+
+enum Status {
+  option features.enum_type = CLOSED;  // proto2 enums are closed
+  UNKNOWN = 0;
+  ACTIVE = 1;
+}
+```
+  </Tab>
+</Tabs>
+
+<Tabs>
+  <Tab title="proto3 original">
+```protobuf
+syntax = "proto3";
+
+message Bar {
+  int32 x = 1;
+  optional int32 y = 2;
+  repeated int32 z = 3;
+}
+```
+  </Tab>
+  <Tab title="Editions equivalent">
+```protobuf
+edition = "2023";
+
+// proto3 implicit fields differ from the EXPLICIT default
+option features.field_presence = IMPLICIT;
+
+message Bar {
+  int32 x = 1;
+  int32 y = 2 [features.field_presence = EXPLICIT];  // was optional
+  repeated int32 z = 3;
+}
+```
+  </Tab>
+</Tabs>
+
+## Edition lifecycle
+
+Editions follow a defined lifecycle:
+
+<Steps>
+  <Step title="Introduce">
+    A new edition introduces updated defaults for features. Files that upgrade to the new edition and do not use deprecated features require only a no-op change.
+  </Step>
+  <Step title="Deprecate">
+    Features that are no longer recommended are marked deprecated in a specific edition. Compilers emit warnings when deprecated features are used.
+  </Step>
+  <Step title="Remove">
+    After a suitable migration window, features are removed in a later edition. Removing a feature is a major version bump.
+  </Step>
+</Steps>
+
+The `Edition` enum in `descriptor.proto` tracks all known editions:
+
+```protobuf
+enum Edition {
+  EDITION_UNKNOWN = 0;
+  EDITION_LEGACY  = 900;
+  EDITION_PROTO2  = 998;  // legacy syntax
+  EDITION_PROTO3  = 999;  // legacy syntax
+  EDITION_2023    = 1000; // first published edition
+  EDITION_2024    = 1001;
+  EDITION_MAX     = 0x7FFFFFFF;
+}
+```
+
+`EDITION_PROTO2` and `EDITION_PROTO3` are not valid values for the `edition` field in a `.proto` file. They exist so that feature definitions can specify defaults that match historical proto2 and proto3 behavior.
+
+<Info>
+Projects can upgrade individual `.proto` files to newer editions independently. Editions do not require all files in a project to be at the same edition level.
+</Info>

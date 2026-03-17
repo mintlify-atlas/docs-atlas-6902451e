@@ -1,0 +1,282 @@
+---
+title: "Third-party tools and libraries"
+description: "Community-maintained add-ons for Protocol Buffers, including language runtimes, RPC frameworks, build integrations, IDE plugins, and utilities."
+---
+
+<Warning>
+  These projects are not affiliated with or endorsed by Google unless explicitly marked. They are community-maintained and quality varies. Use them at your own risk, and verify production-readiness before adopting.
+</Warning>
+
+If you maintain a project that should be listed here, [send a pull request](https://github.com/protocolbuffers/protobuf/pulls) to update `docs/third_party.md` in the repository.
+
+## Language runtimes
+
+Google ships official runtimes for C++, Java, Python, Go, C#, Ruby, PHP, Objective-C, and Rust. The projects below provide support for additional languages or alternative implementations.
+
+<AccordionGroup>
+  <Accordion title="C and C++">
+    - [protobuf-c](https://github.com/protobuf-c/protobuf-c) — Pure C runtime
+    - [nanopb](https://koti.kapsi.fi/jpa/nanopb/) — Small code-size C implementation for embedded systems
+    - [pbc](https://github.com/cloudwu/pbc/) — C library focused on performance
+    - [upb](https://github.com/haberman/upb/wiki) — Micro protobuf library in C
+    - [protobluff](https://github.com/squidfunk/protobluff) — C implementation
+    - [pbtools](https://github.com/eerimoq/pbtools) — C code generator
+    - [simple-protobuf](https://github.com/tonda-kriz/simple-protobuf) — Alternative C++ implementation
+    - [EmbeddedProto](https://EmbeddedProto.com) — C++ for embedded targets
+    - [struct2x](https://github.com/yksten/struct2x) — C++ struct serialization
+  </Accordion>
+
+  <Accordion title="C# / .NET">
+    - [protobuf-csharp-port](https://code.google.com/p/protobuf-csharp-port)
+    - [silentorbit/protobuf](https://silentorbit.com/protobuf/)
+    - [protobuf-net](https://code.google.com/p/protobuf-net/) — C#/.NET/WCF/VB
+  </Accordion>
+
+  <Accordion title="Clojure and ClojureScript">
+    - [clojure-protobuf](http://github.com/ninjudd/clojure-protobuf)
+    - [clojusc/protobuf](https://github.com/clojusc/protobuf)
+    - [protojure](https://protojure.readthedocs.io)
+    - [clojobuf](https://github.com/s-expresso/clojobuf) — supports both Clojure and ClojureScript
+  </Accordion>
+
+  <Accordion title="D">
+    - [protobuf-d](https://github.com/dcarp/protobuf-d)
+    - [dproto](https://github.com/msoucy/dproto)
+    - [ProtocolBuffer](https://github.com/opticron/ProtocolBuffer)
+  </Accordion>
+
+  <Accordion title="Dart">
+    - [dart-protobuf](https://github.com/dart-lang/dart-protobuf) — runtime library
+    - [dart-protoc-plugin](https://github.com/dart-lang/dart-protoc-plugin) — code generator
+  </Accordion>
+
+  <Accordion title="Elixir">
+    - [exprotoc](https://github.com/jeremyong/exprotoc)
+    - [protobuf-elixir](https://github.com/tony612/protobuf-elixir)
+    - [protox](https://github.com/ahamez/protox)
+  </Accordion>
+
+  <Accordion title="Erlang">
+    - [gpb](https://github.com/tomas-abrahamsson/gpb) — actively maintained
+    - [piqi](http://piqi.org/)
+  </Accordion>
+
+  <Accordion title="Go (alternative)">
+    - [golang/protobuf](https://github.com/golang/protobuf) — Google-official Go implementation
+    - [gopbuf](https://github.com/akunspy/gopbuf)
+    - [gogo/protobuf](https://github.com/gogo/protobuf)
+  </Accordion>
+
+  <Accordion title="Haskell">
+    - [hprotoc](https://hackage.haskell.org/package/hprotoc)
+    - [proto-lens](https://github.com/google/proto-lens) — Google-unofficial
+    - [proto3-suite](https://github.com/awakesecurity/proto3-suite) (generator) + [proto3-wire](https://github.com/awakesecurity/proto3-wire) (serializer)
+  </Accordion>
+
+  <Accordion title="Java (alternative) and Kotlin">
+    - [Wire](https://github.com/square/wire) — Java/Android from Square
+    - [QuickBuffers](https://github.com/HebiRobotics/QuickBuffers/) — high-performance Java
+    - [kroto-plus](https://github.com/marcoferrer/kroto-plus) — Kotlin
+    - [kotlinx.serialization](https://github.com/Kotlin/kotlinx.serialization) — Kotlin
+    - [sisyphus](https://github.com/ButterCam/sisyphus) — Kotlin
+    - [protokt](https://github.com/open-toast/protokt) — Kotlin
+    - [pbandk](https://github.com/streem/pbandk) — Kotlin Multiplatform
+  </Accordion>
+
+  <Accordion title="JavaScript and TypeScript">
+    - [ProtoBuf.js](https://github.com/dcodeIO/ProtoBuf.js)
+    - [node-protoc-plugin](https://github.com/seishun/node-protoc-plugin) — Node.js port of `plugin.h`
+    - [sisyphus-js](https://github.com/ButterCam/sisyphus-js)
+    - [ts-protoc-gen](https://github.com/improbable-eng/ts-protoc-gen)
+    - [protoc-gen-ts](https://github.com/thesayyn/protoc-gen-ts)
+    - [pbkit](https://github.com/pbkit/pbkit)
+  </Accordion>
+
+  <Accordion title="Julia">
+    - [ProtoBuf.jl](https://github.com/JuliaIO/ProtoBuf.jl)
+  </Accordion>
+
+  <Accordion title="Lua">
+    - [protoc-gen-lua](https://code.google.com/p/protoc-gen-lua/)
+    - [lua-protobuf](http://github.com/indygreg/lua-protobuf)
+    - [lua-pb](https://github.com/Neopallium/lua-pb)
+  </Accordion>
+
+  <Accordion title="Objective-C">
+    - [protobuf-objc (Google Code)](https://code.google.com/p/protobuf-objc/)
+    - [protobuf-objc (alexeyxo)](https://github.com/alexeyxo/protobuf-objc)
+  </Accordion>
+
+  <Accordion title="PHP">
+    - [pb4php](https://code.google.com/p/pb4php/)
+    - [php-protobuf](https://github.com/allegro/php-protobuf/)
+    - [php-protocolbuffers](https://github.com/chobie/php-protocolbuffers)
+  </Accordion>
+
+  <Accordion title="Ruby (alternative)">
+    - [ruby-protobuf](https://code.google.com/p/ruby-protobuf/)
+    - [ruby-protocol-buffers](http://github.com/mozy/ruby-protocol-buffers)
+    - [beefcake](https://github.com/bmizerany/beefcake/tree/master/lib/beefcake)
+    - [protobuf (localshred)](https://github.com/localshred/protobuf)
+  </Accordion>
+
+  <Accordion title="Rust">
+    - [prost](https://github.com/tokio-rs/prost)
+    - [rust-protobuf](https://github.com/stepancheg/rust-protobuf/)
+    - [quick-protobuf](https://github.com/tafia/quick-protobuf)
+  </Accordion>
+
+  <Accordion title="Scala">
+    - [scala-protobuf](http://github.com/jeffplaisance/scala-protobuf)
+    - [ScalaBuff](https://github.com/SandroGrzicic/ScalaBuff)
+    - [ScalaPB](https://scalapb.github.io)
+  </Accordion>
+
+  <Accordion title="Swift">
+    - [protobuf-swift (alexeyxo)](https://github.com/alexeyxo/protobuf-swift)
+    - [swift-protobuf (Apple)](https://github.com/apple/swift-protobuf/)
+  </Accordion>
+
+  <Accordion title="Other languages">
+    - **Action Script**: [protobuf-actionscript3](https://code.google.com/p/protobuf-actionscript3/), [protoc-gen-as3](https://code.google.com/p/protoc-gen-as3/)
+    - **Ada**: [protobuf (reznikmm)](https://github.com/reznikmm/protobuf)
+    - **Common Lisp**: [protobuf (brown)](http://github.com/brown/protobuf), [cl-protobuf](http://github.com/qitab/cl-protobuf)
+    - **Elm**: [elm-protobuf](https://github.com/tiziano88/elm-protobuf)
+    - **GDScript**: [godobuf](https://github.com/oniksan/godobuf) — Godot v3 plugin
+    - **GopherJS**: [protobuf (johanbrandhorst)](https://github.com/johanbrandhorst/protobuf)
+    - **Haxe**: [protoc-gen-haxe](https://github.com/Atry/protoc-gen-haxe)
+    - **Perl**: [Google::ProtocolBuffers](https://metacpan.org/pod/Google::ProtocolBuffers), [Google::ProtocolBuffers::Dynamic](https://metacpan.org/pod/Google::ProtocolBuffers::Dynamic)
+    - **Prolog**: [SWI-Prolog protobufs](http://www.swi-prolog.org/pldoc/package/protobufs.html)
+    - **Purescript**: [purescript-protobuf](https://github.com/xc-jp/purescript-protobuf)
+    - **Python (alternative)**: [eigenein/protobuf](https://github.com/eigenein/protobuf), [python-betterproto](https://github.com/danielgtaylor/python-betterproto)
+    - **R**: [RProtoBuf](http://cran.r-project.org/package=RProtoBuf)
+    - **Solidity**: [pb3-gen-sol](https://github.com/celer-network/pb3-gen-sol)
+    - **Vala**: [protobuf-vala](https://launchpad.net/protobuf-vala)
+    - **Zig**: [zig-protobuf](https://github.com/Arwalk/zig-protobuf)
+  </Accordion>
+</AccordionGroup>
+
+## RPC implementations
+
+[gRPC](http://www.grpc.io/) is Google's official RPC framework for Protocol Buffers. The following projects provide alternative or complementary RPC support.
+
+<CardGroup cols={2}>
+  <Card title="gRPC" icon="server" href="https://github.com/grpc/grpc">
+    Google-official implementation for C++, Node.js, Python, Ruby, Objective-C, PHP, and C#.
+  </Card>
+  <Card title="Twirp" icon="plug" href="https://github.com/twitchtv/twirp">
+    Simple RPC framework supporting multiple languages.
+  </Card>
+  <Card title="ZeroC Ice" icon="snowflake" href="https://zeroc.com/products/ice">
+    Multi-language RPC middleware.
+  </Card>
+  <Card title="protojure" icon="code" href="https://protojure.github.io">
+    gRPC and protobuf for Clojure.
+  </Card>
+  <Card title="elixir-grpc" icon="bolt" href="https://github.com/elixir-grpc/grpc">
+    gRPC implementation for Elixir.
+  </Card>
+  <Card title="gRPC-haskell" icon="lambda" href="https://github.com/awakesecurity/gRPC-haskell">
+    Haskell bindings for gRPC.
+  </Card>
+  <Card title="grpc-federation" icon="diagram-project" href="https://github.com/mercari/grpc-federation">
+    Generate a gRPC server from custom proto options.
+  </Card>
+  <Card title="icerpc-csharp" icon="ice-cream" href="https://github.com/icerpc/icerpc-csharp">
+    Modern RPC framework for C#.
+  </Card>
+</CardGroup>
+
+## Build integrations
+
+<AccordionGroup>
+  <Accordion title="Bazel">
+    - [rules_closure](https://github.com/bazelbuild/rules_closure) — JavaScript (Closure)
+    - [rules_go](https://github.com/bazelbuild/rules_go) — Go
+    - [rules_protobuf](https://github.com/pubref/rules_protobuf) — Java, C++, C#, Go, JS, Python, Ruby
+  </Accordion>
+
+  <Accordion title="Maven">
+    - [protobuf-maven-plugin by xolstice.org](https://www.xolstice.org/protobuf-maven-plugin/) ([source](https://github.com/xolstice/protobuf-maven-plugin/))
+    - [protoc-jar-maven-plugin](https://github.com/os72/protoc-jar-maven-plugin)
+    - [protobuf-maven-plugin by ascopes](https://ascopes.github.io/protobuf-maven-plugin)
+  </Accordion>
+
+  <Accordion title="Gradle and sbt">
+    - [protobuf-gradle-plugin](https://github.com/google/protobuf-gradle-plugin)
+    - [sbt-cppp](https://github.com/Atry/sbt-cppp) — sbt plugin
+  </Accordion>
+</AccordionGroup>
+
+## IDE and editor plugins
+
+<CardGroup cols={2}>
+  <Card title="VS Code proto3" icon="code" href="https://marketplace.visualstudio.com/items?itemName=zxh404.vscode-proto3">
+    Syntax highlighting and IntelliSense for `.proto` files in Visual Studio Code.
+  </Card>
+  <Card title="IntelliJ Protobuf Editor" icon="rectangle-code" href="http://github.com/jvolkman/intellij-protobuf-editor">
+    IDEA plugin for editing `.proto` files.
+  </Card>
+  <Card title="IntelliJ Protobuf Plugin" icon="rectangle-code" href="https://github.com/devkanro/intellij-protobuf-plugin">
+    Alternative JetBrains IDE plugin with extended language support.
+  </Card>
+  <Card title="Visual Studio Language Service" icon="window" href="http://visualstudiogallery.msdn.microsoft.com/4bc0f38c-b058-4e05-ae38-155e053c19c5">
+    Protocol Buffers language service for Visual Studio.
+  </Card>
+  <Card title="Eclipse editor" icon="circle-e" href="https://code.google.com/p/protobuf-dt/">
+    Eclipse editor for `.proto` files (from Google).
+  </Card>
+  <Card title="TextMate bundle" icon="terminal" href="http://github.com/michaeledgar/protobuf-tmbundle">
+    Syntax highlighting bundle for TextMate.
+  </Card>
+</CardGroup>
+
+## Documentation generators
+
+- [protoc-gen-doc](https://github.com/pseudomuto/protoc-gen-doc) — Generates Markdown, HTML, DocBook, and JSON documentation from `.proto` files
+- [protoc-gen-docbook](https://code.google.com/p/protoc-gen-docbook/) — DocBook generator
+
+## Utilities
+
+<AccordionGroup>
+  <Accordion title="Linting and validation">
+    - [protoc-gen-lint](https://github.com/ckaznocha/protoc-gen-lint) — Linter for `.proto` files
+    - [protolint](https://github.com/yoheimuta/protolint) — Enforce style and conventions
+      - [vscode-protolint](https://github.com/plexsystems/vscode-protolint)
+      - [intellij-protolint](https://github.com/yoheimuta/intellij-protolint)
+      - [vim-protolint](https://github.com/yoheimuta/vim-protolint)
+    - [super-linter](https://github.com/github/super-linter) — Protocol Buffer lint as a GitHub Action
+    - [Protolock](https://github.com/nilslice/protolock) — Prevent backward-incompatible changes to `.proto` files
+  </Accordion>
+
+  <Accordion title="Code generation helpers">
+    - [protoc-gen-fieldmask](https://github.com/idodod/protoc-gen-fieldmask) — Generate static-type fieldmask paths
+    - [protoc-gen-bq-schema](https://github.com/GoogleCloudPlatform/protoc-gen-bq-schema) — Generate BigQuery schema files
+    - [Proto Boiler](https://github.com/in4lio/protoboiler) — Generate boilerplate from `.proto` files using templates
+    - [node-protoc-plugin](https://github.com/konsumer/node-protoc-plugin) — Write protoc plugins in Node.js
+    - [go-protoparser](https://github.com/yoheimuta/go-protoparser) — Parse `.proto` files in Go
+    - [rubberbuf](https://github.com/s-expresso/rubberbuf) — Transpile protobuf into AST (Clojure/ClojureScript)
+  </Accordion>
+
+  <Accordion title="JSON and alternate encodings">
+    - [protobuf-java-format](https://code.google.com/p/protobuf-java-format/) — JSON, XML, HTML encodings for Java protobufs
+    - [protobuf-codec](https://github.com/sijuv/protobuf-codec) — Another JSON encoder/decoder for Java
+    - [pbjson](https://github.com/yinqiwen/pbjson) — C++ JSON serialization/deserialization
+    - [py-pb-converters](https://github.com/NextTuesday/py-pb-converters) — Python scripts to convert between protobuf and JSON
+    - [protobuf-decoder-explainer](https://github.com/jamesdbrock/protobuf-decoder-explainer) — Web tool to decode and explain binary protobuf payloads
+  </Accordion>
+
+  <Accordion title="Testing and schema management">
+    - [hypothesis-protobuf](https://github.com/CurataEng/hypothesis-protobuf) — Property-based testing utility for Python/Hypothesis
+    - [protobuf_spec](https://github.com/connamara/protobuf_spec) — RSpec matchers and Cucumber step definitions
+    - [protobuf-dynamic](https://github.com/os72/protobuf-dynamic) — Dynamic schema creation (Java)
+    - [protoc-jar](https://github.com/os72/protoc-jar) — Multi-platform executable JAR and Java API for `protoc`
+    - [protobuf-el](https://github.com/protobufel/protobuf-el) — Java EE7 Expression Language parser and builder
+    - [ProfaneDB](https://profanedb.gitlab.io) — A Protocol Buffers database
+  </Accordion>
+
+  <Accordion title="Network tools">
+    - [Wireshark/Ethereal plugin](https://code.google.com/p/protobuf-wireshark/) — Packet sniffer plugin for decoding protobuf messages
+    - [protobuf-nginx](https://github.com/dbcode/protobuf-nginx/) — Protobuf support for nginx
+  </Accordion>
+</AccordionGroup>

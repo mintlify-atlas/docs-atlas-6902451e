@@ -1,0 +1,218 @@
+---
+title: Ruby Guide
+description: Use Protocol Buffers with Ruby — gem installation, code generation, encoding, and decoding.
+---
+
+The Ruby Protocol Buffers runtime (version `4.35-dev`) provides a native C extension for MRI Ruby and a Java extension for JRuby. Both expose the same API.
+
+## Installation
+
+<Steps>
+  <Step title="Install the gem">
+    Add to your `Gemfile`:
+
+    ```ruby
+    gem 'google-protobuf'
+    ```
+
+    Or install directly:
+
+    ```bash
+    gem install google-protobuf
+    ```
+
+    Check [RubyGems](https://rubygems.org/gems/google-protobuf) for the latest available version.
+  </Step>
+
+  <Step title="Install protoc">
+    Download the prebuilt `protoc` binary for your platform from the [releases page](https://github.com/protocolbuffers/protobuf/releases/latest). The latest release supports the `--ruby_out` option.
+  </Step>
+
+  <Step title="Generate Ruby code">
+    Run `protoc` with `--ruby_out`:
+
+    ```bash
+    protoc --ruby_out=. addressbook.proto
+    ```
+
+    This creates `addressbook_pb.rb`.
+  </Step>
+</Steps>
+
+## Working with messages
+
+Require the generated file and the `google/protobuf` library:
+
+```ruby
+require 'google/protobuf'
+require './addressbook_pb'
+
+# Create a person
+person = Tutorial::Person.new(
+  id: 1234,
+  name: "Jane Doe",
+  email: "jane@example.com",
+  phones: [
+    Tutorial::Person::PhoneNumber.new(
+      number: "+1-555-0100",
+      type: :MOBILE
+    )
+  ]
+)
+
+# Set fields individually
+person.id = 5678
+person.name = "John Doe"
+```
+
+### Encoding and decoding
+
+<CodeGroup>
+
+```ruby encode to bytes
+encoded = Tutorial::Person.encode(person)
+```
+
+```ruby decode from bytes
+decoded = Tutorial::Person.decode(encoded)
+```
+
+```ruby encode to JSON
+json = Tutorial::Person.encode_json(person)
+```
+
+```ruby decode from JSON
+person = Tutorial::Person.decode_json(json)
+```
+
+</CodeGroup>
+
+## Full example: add_person.rb
+
+This example reads an address book from disk, prompts for a new person, and writes it back:
+
+```ruby
+#!/usr/bin/env ruby
+
+require './addressbook_pb'
+require 'pry'
+
+def prompt_for_address()
+  person = Tutorial::Person.new
+
+  puts "Enter person ID number:"
+  person.id = STDIN.gets.chomp.to_i
+  puts "Enter name:"
+  person.name = STDIN.gets.chomp
+
+  puts "Enter email address (blank for none):"
+  email = STDIN.gets.chomp
+
+  if email != ""
+    person.email = email
+  end
+
+  loop do
+    puts "Enter a phone number (or leave blank to finish):"
+    number = STDIN.gets.chomp
+
+    if number == ""
+      break
+    end
+
+    phone_number = Tutorial::Person::PhoneNumber.new(number: number)
+    puts "Is this a mobile, home or work phone?"
+    type = STDIN.gets.chomp
+
+    case type
+    when "mobile"
+      phone_number.type = :MOBILE
+    when "home"
+      phone_number.type = :HOME
+    when "work"
+      phone_number.type = :WORK
+    else
+      puts "Unknown phone type; leaving as default value."
+    end
+    person.phones.push(phone_number)
+  end
+  person
+end
+
+if ARGV.length != 1
+  puts "Usage: #{$0} ADDRESS_BOOK_FILE"
+  exit(-1)
+end
+
+address_book = Tutorial::AddressBook.new()
+if File.exist?(ARGV[0])
+  f = File.open(ARGV[0], "rb")
+  address_book = Tutorial::AddressBook.decode(f.read)
+  f.close
+else
+  puts "#{$PROGRAM_NAME}: File not found. Creating new file."
+end
+
+person = prompt_for_address
+address_book.people.push(person)
+
+f = File.open(ARGV[0], "wb")
+f.write(Tutorial::AddressBook.encode(address_book))
+f.close
+```
+
+## Basic usage pattern
+
+Here is a minimal usage example from the Ruby README:
+
+```ruby
+require 'google/protobuf'
+require 'my_proto_types'  # generated from my_proto_types.proto
+
+mymessage = MyTestMessage.new(field1: 42, field2: ["a", "b", "c"])
+mymessage.field1 = 43
+mymessage.field2.push("d")
+mymessage.field3 = SubMessage.new(foo: 100)
+
+encoded_data = MyTestMessage.encode(mymessage)
+decoded = MyTestMessage.decode(encoded_data)
+raise unless mymessage == decoded
+
+puts "JSON:"
+puts MyTestMessage.encode_json(mymessage)
+```
+
+## FFI backend
+
+An experimental FFI-based backend provides a unified C implementation across Ruby interpreters (MRI and JRuby). To opt in:
+
+```bash
+PROTOCOL_BUFFERS_RUBY_IMPLEMENTATION=FFI ruby your_script.rb
+```
+
+The FFI backend requires the `ffi` and `ffi-compiler` gems:
+
+```bash
+gem install ffi ffi-compiler
+```
+
+<Info>
+  If `ffi` or `ffi-compiler` are not installed, or if the environment variable is not set to `FFI`, the traditional platform-native extension is used automatically.
+</Info>
+
+## Key API reference
+
+<CardGroup cols={2}>
+  <Card title="Encode / Decode" icon="arrow-right-left">
+    `MessageClass.encode(msg)` returns a binary `String`. `MessageClass.decode(bytes)` returns a new message instance. These are class-level methods on every generated message class.
+  </Card>
+  <Card title="JSON" icon="braces">
+    `MessageClass.encode_json(msg)` and `MessageClass.decode_json(json_string)` for canonical protobuf JSON.
+  </Card>
+  <Card title="Repeated fields" icon="list">
+    Repeated fields behave like Ruby arrays. Use standard array methods: `push`, `each`, `map`, `length`, etc.
+  </Card>
+  <Card title="Enums" icon="tag">
+    Enum values are Ruby symbols (e.g., `:MOBILE`, `:HOME`). Assign and compare using symbols.
+  </Card>
+</CardGroup>

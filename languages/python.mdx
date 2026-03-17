@@ -1,0 +1,203 @@
+---
+title: Python Guide
+description: Use Protocol Buffers with Python — installation, code generation, serialization, and implementation backends.
+---
+
+The Python Protocol Buffers runtime (version `7.35-dev`) supports three implementation backends and generates `_pb2.py` modules that you import directly.
+
+## Installation
+
+<Steps>
+  <Step title="Install the protobuf package">
+    ```bash
+    pip install protobuf
+    ```
+
+    Binary wheels are available on PyPI for most platforms. The default backend is `upb`, a C extension built on the upb library that delivers the best performance.
+  </Step>
+
+  <Step title="Install protoc">
+    Download the prebuilt `protoc` binary for your platform from the [releases page](https://github.com/protocolbuffers/protobuf/releases/latest) and add it to your `$PATH`.
+  </Step>
+</Steps>
+
+## Generating code
+
+Run `protoc` with `--python_out` to generate a `_pb2.py` module:
+
+```bash
+protoc --python_out=. addressbook.proto
+```
+
+This creates `addressbook_pb2.py`. To also generate a type stub (`.pyi`) for IDE support:
+
+```bash
+protoc --python_out=pyi_out:output_dir addressbook.proto
+```
+
+The `_pb2.pyi` stub file is human-readable and useful for IDE autocompletion. The `_pb2.py` file itself is optimized for fast loading and is not intended to be read directly.
+
+## Working with messages
+
+Import the generated module and create messages as plain Python objects:
+
+```python
+import addressbook_pb2
+
+# Create a person
+person = addressbook_pb2.Person()
+person.id = 1234
+person.name = "Jane Doe"
+person.email = "jane@example.com"
+
+# Add a phone number (repeated field)
+phone = person.phones.add()
+phone.number = "+1-555-0100"
+phone.type = addressbook_pb2.Person.MOBILE
+```
+
+### Serializing and parsing
+
+<CodeGroup>
+
+```python serialize to bytes
+serialized = person.SerializeToString()
+```
+
+```python parse from bytes
+parsed = addressbook_pb2.Person()
+parsed.ParseFromString(serialized)
+```
+
+```python write to file
+with open("addressbook.bin", "wb") as f:
+    f.write(address_book.SerializeToString())
+```
+
+```python read from file
+address_book = addressbook_pb2.AddressBook()
+with open("addressbook.bin", "rb") as f:
+    address_book.ParseFromString(f.read())
+```
+
+</CodeGroup>
+
+## Full example: add_person.py
+
+This example reads an address book from disk, prompts for a new person, and writes it back:
+
+```python
+import addressbook_pb2
+import sys
+
+try:
+  raw_input          # Python 2
+except NameError:
+  raw_input = input  # Python 3
+
+
+def PromptForAddress(person):
+  person.id = int(raw_input("Enter person ID number: "))
+  person.name = raw_input("Enter name: ")
+
+  email = raw_input("Enter email address (blank for none): ")
+  if email != "":
+    person.email = email
+
+  while True:
+    number = raw_input("Enter a phone number (or leave blank to finish): ")
+    if number == "":
+      break
+
+    phone_number = person.phones.add()
+    phone_number.number = number
+
+    type = raw_input("Is this a mobile, home, or work phone? ")
+    if type == "mobile":
+      phone_number.type = addressbook_pb2.Person.MOBILE
+    elif type == "home":
+      phone_number.type = addressbook_pb2.Person.HOME
+    elif type == "work":
+      phone_number.type = addressbook_pb2.Person.WORK
+    else:
+      print("Unknown phone type; leaving as default value.")
+
+
+if len(sys.argv) != 2:
+  print("Usage:", sys.argv[0], "ADDRESS_BOOK_FILE")
+  sys.exit(-1)
+
+address_book = addressbook_pb2.AddressBook()
+
+try:
+  with open(sys.argv[1], "rb") as f:
+    address_book.ParseFromString(f.read())
+except IOError:
+  print(sys.argv[1] + ": File not found.  Creating a new file.")
+
+PromptForAddress(address_book.people.add())
+
+with open(sys.argv[1], "wb") as f:
+  f.write(address_book.SerializeToString())
+```
+
+## Implementation backends
+
+The Python runtime automatically selects the best available backend. You can override this with the `PROTOCOL_BUFFERS_PYTHON_IMPLEMENTATION` environment variable:
+
+| Backend | Description | Performance |
+|---------|-------------|-------------|
+| `upb` | C extension built on the upb library. Default since 4.21.0. | Best |
+| `cpp` | Wraps the C++ protobuf library. Deprecated; not in PyPI packages. | Good |
+| `python` | Pure Python. No C extension required. | Slowest |
+
+Check which backend is active:
+
+```python
+from google.protobuf.internal import api_implementation
+print(api_implementation.Type())  # e.g. "upb"
+```
+
+<Info>
+  The `cpp` backend is no longer distributed via PyPI. It exists only for legacy use cases requiring zero-copy message sharing between Python and C++.
+</Info>
+
+## Descriptor and reflection APIs
+
+The `google.protobuf.descriptor` module exposes the full descriptor for each message. This is useful for generic serialization code, validation frameworks, and schema inspection:
+
+```python
+import addressbook_pb2
+from google.protobuf import descriptor
+
+# Access the descriptor for a message
+desc = addressbook_pb2.Person.DESCRIPTOR
+print(desc.name)           # "Person"
+print(desc.full_name)      # "tutorial.Person"
+
+for field in desc.fields:
+    print(field.name, field.type)
+
+# Create a message instance from a descriptor (reflection)
+from google.protobuf import reflection
+person = addressbook_pb2.Person()
+```
+
+## Key API reference
+
+<CardGroup cols={2}>
+  <Card title="Message" icon="cube">
+    All generated classes are subclasses of `google.protobuf.message.Message`. Fields are set as attributes. Repeated fields behave like Python lists. Map fields behave like Python dicts.
+  </Card>
+  <Card title="Serialization" icon="arrow-right-left">
+    `SerializeToString()` — returns bytes.
+    `ParseFromString(data)` — parses bytes in place.
+    `MergeFromString(data)` — merges bytes into an existing message.
+  </Card>
+  <Card title="JSON" icon="braces">
+    `google.protobuf.json_format.MessageToJson(message)` and `JsonFormat.Parse(json_string, message)` for JSON conversion.
+  </Card>
+  <Card title="Descriptors" icon="list">
+    `Message.DESCRIPTOR` — access the `Descriptor` object. Use `descriptor_pool` and `message_factory` for dynamic message creation.
+  </Card>
+</CardGroup>

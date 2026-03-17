@@ -1,0 +1,433 @@
+---
+title: Well-known types
+description: Official well-known types shipped with Protocol Buffers — Any, Timestamp, Duration, Struct, Value, ListValue, Empty, FieldMask, and the wrapper types.
+---
+
+Protocol Buffers ships a set of officially maintained message types in the `google.protobuf` package. These **well-known types** solve common problems (timestamps, arbitrary JSON, nullable scalars, etc.) in a standard, interoperable way.
+
+All well-known types are in `src/google/protobuf/` in the protobuf repository and are available as pre-compiled types in every supported language's runtime library.
+
+<CardGroup cols={2}>
+  <Card title="Any" icon="box">
+    Hold an arbitrary serialized message with its type URL.
+  </Card>
+  <Card title="Timestamp" icon="clock">
+    A point in time at nanosecond resolution, independent of time zone.
+  </Card>
+  <Card title="Duration" icon="timer">
+    A signed time span at nanosecond resolution.
+  </Card>
+  <Card title="Struct / Value / ListValue" icon="brackets-curly">
+    Dynamic JSON-like structured values.
+  </Card>
+  <Card title="Empty" icon="circle-dashed">
+    A reusable empty message for RPC methods with no payload.
+  </Card>
+  <Card title="FieldMask" icon="filter">
+    A set of field paths for partial reads and partial updates.
+  </Card>
+  <Card title="Wrappers" icon="package">
+    Nullable versions of all scalar types.
+  </Card>
+</CardGroup>
+
+## google.protobuf.Any
+
+**Import:** `google/protobuf/any.proto`  
+**Go package:** `google.golang.org/protobuf/types/known/anypb`
+
+`Any` holds an arbitrary serialized Protocol Buffer message together with a URL that identifies the message type. This allows you to pass messages whose type is not known at compile time.
+
+```protobuf
+message Any {
+  // Identifies the type of the serialized Protobuf message with a URI
+  // reference consisting of a prefix ending in a slash and the
+  // fully-qualified type name.
+  //
+  // Example: type.googleapis.com/google.protobuf.StringValue
+  string type_url = 1;
+
+  // Holds a Protobuf serialization of the type described by type_url.
+  bytes value = 2;
+}
+```
+
+### Key operations
+
+- **Pack**: serializes a message into `Any` and sets `type_url`
+- **Unpack**: deserializes the `value` bytes into a target message, checking `type_url`
+- **Is**: returns whether the `Any` holds a message of a given type
+
+### Usage example
+
+```protobuf
+import "google/protobuf/any.proto";
+
+message ErrorDetail {
+  string message = 1;
+  google.protobuf.Any metadata = 2;
+}
+```
+
+```go
+import (
+    "google.golang.org/protobuf/types/known/anypb"
+    mypb "example.com/myproto"
+)
+
+// Pack
+detail := &mypb.ResourceInfo{Name: "projects/123"}
+any, err := anypb.New(detail)
+
+// Unpack
+var info mypb.ResourceInfo
+if err := any.UnmarshalTo(&info); err != nil {
+    // type mismatch or decode error
+}
+```
+
+<Warning>
+Do not attempt to contact the URLs stored in `type_url`. They are opaque identifiers, not resolvable endpoints.
+</Warning>
+
+---
+
+## google.protobuf.Timestamp
+
+**Import:** `google/protobuf/timestamp.proto`  
+**Go package:** `google.golang.org/protobuf/types/known/timestamppb`
+
+`Timestamp` represents a point in time independent of any time zone or local calendar, encoded as seconds and nanoseconds since the Unix epoch (`1970-01-01T00:00:00Z`). The valid range is `0001-01-01T00:00:00Z` to `9999-12-31T23:59:59.999999999Z`.
+
+Leap seconds are smeared using a 24-hour linear smear, so no leap second table is needed.
+
+```protobuf
+message Timestamp {
+  // Seconds of UTC time since Unix epoch 1970-01-01T00:00:00Z.
+  // Must be between -62135596800 and 253402300799 inclusive.
+  int64 seconds = 1;
+
+  // Non-negative fractions of a second at nanosecond resolution.
+  // Must be between 0 and 999,999,999 inclusive.
+  int32 nanos = 2;
+}
+```
+
+**JSON encoding:** RFC 3339 string, e.g. `"2017-01-15T01:30:15.01Z"`.
+
+### Usage example
+
+```protobuf
+import "google/protobuf/timestamp.proto";
+
+message Person {
+  string name = 1;
+  int32 id = 2;
+  string email = 3;
+  google.protobuf.Timestamp last_updated = 5;
+}
+```
+
+<Tabs>
+  <Tab title="C++">
+    ```cpp
+    // From POSIX time()
+    Timestamp timestamp;
+    timestamp.set_seconds(time(NULL));
+    timestamp.set_nanos(0);
+    ```
+  </Tab>
+  <Tab title="Java">
+    ```java
+    // From Instant.now()
+    Instant now = Instant.now();
+    Timestamp timestamp = Timestamp.newBuilder()
+        .setSeconds(now.getEpochSecond())
+        .setNanos(now.getNano())
+        .build();
+    ```
+  </Tab>
+  <Tab title="Python">
+    ```python
+    from google.protobuf.timestamp_pb2 import Timestamp
+
+    timestamp = Timestamp()
+    timestamp.GetCurrentTime()
+    ```
+  </Tab>
+  <Tab title="Go">
+    ```go
+    import "google.golang.org/protobuf/types/known/timestamppb"
+
+    ts := timestamppb.Now()
+    ```
+  </Tab>
+</Tabs>
+
+---
+
+## google.protobuf.Duration
+
+**Import:** `google/protobuf/duration.proto`  
+**Go package:** `google.golang.org/protobuf/types/known/durationpb`
+
+`Duration` represents a signed, fixed-length span of time at nanosecond resolution, independent of any calendar. It is the difference between two `Timestamp` values. The range is approximately ±10,000 years.
+
+```protobuf
+message Duration {
+  // Signed seconds of the span of time.
+  // Must be from -315,576,000,000 to +315,576,000,000 inclusive.
+  int64 seconds = 1;
+
+  // Signed fractions of a second at nanosecond resolution.
+  // For durations >= 1 second, nanos must have the same sign as seconds.
+  // Must be from -999,999,999 to +999,999,999 inclusive.
+  int32 nanos = 2;
+}
+```
+
+**JSON encoding:** string with suffix `"s"`, e.g. `"3s"`, `"3.000000001s"`.
+
+### Computing a duration from two timestamps
+
+```cpp
+// Pseudocode
+Duration duration;
+duration.seconds = end.seconds - start.seconds;
+duration.nanos = end.nanos - start.nanos;
+
+// Normalize if signs differ
+if (duration.seconds < 0 && duration.nanos > 0) {
+  duration.seconds += 1;
+  duration.nanos -= 1000000000;
+} else if (duration.seconds > 0 && duration.nanos < 0) {
+  duration.seconds -= 1;
+  duration.nanos += 1000000000;
+}
+```
+
+---
+
+## google.protobuf.Struct, Value, and ListValue
+
+**Import:** `google/protobuf/struct.proto`  
+**Go package:** `google.golang.org/protobuf/types/known/structpb`
+
+These three types together represent arbitrary JSON-like structured data.
+
+### Struct
+
+`Struct` represents a JSON object — an unordered map of string keys to `Value` entries.
+
+```protobuf
+// Represents a JSON object.
+message Struct {
+  // Unordered map of dynamically typed values.
+  map<string, Value> fields = 1;
+}
+```
+
+### Value
+
+`Value` holds one of the six JSON value kinds: null, number, string, boolean, object (`Struct`), or array (`ListValue`).
+
+```protobuf
+// Represents a JSON value.
+message Value {
+  oneof kind {
+    NullValue null_value = 1;    // JSON null
+    double number_value = 2;     // JSON number
+    string string_value = 3;     // JSON string
+    bool bool_value = 4;         // JSON boolean
+    Struct struct_value = 5;     // JSON object
+    ListValue list_value = 6;    // JSON array
+  }
+}
+
+enum NullValue {
+  NULL_VALUE = 0;
+}
+```
+
+<Note>
+`Value` cannot represent `NaN`, `Infinity`, or `-Infinity` in its `number_value` field, because the JSON format does not support those. It also cannot represent `int64` values larger than 2⁵³ without precision loss.
+</Note>
+
+### ListValue
+
+`ListValue` represents a JSON array.
+
+```protobuf
+// Represents a JSON array.
+message ListValue {
+  repeated Value values = 1;
+}
+```
+
+### Usage example
+
+```protobuf
+import "google/protobuf/struct.proto";
+
+message ApiResponse {
+  int32 status = 1;
+  // Carry arbitrary JSON metadata without a typed schema
+  google.protobuf.Struct metadata = 2;
+}
+```
+
+<Tip>
+If you know the shape of the data at design time, model it as a typed proto message instead of using `Struct`. `Struct` trades type safety for flexibility.
+</Tip>
+
+---
+
+## google.protobuf.Empty
+
+**Import:** `google/protobuf/empty.proto`  
+**Go package:** `google.golang.org/protobuf/types/known/emptypb`
+
+`Empty` is a generic empty message you can reuse as the request or response type of an RPC that has no payload, avoiding duplicated empty message definitions across your API.
+
+```protobuf
+// A generic empty message that you can re-use to avoid defining duplicated
+// empty messages in your APIs.
+message Empty {}
+```
+
+### Usage example
+
+```protobuf
+import "google/protobuf/empty.proto";
+
+service Foo {
+  rpc Bar(google.protobuf.Empty) returns (google.protobuf.Empty);
+  rpc DeleteResource(DeleteResourceRequest) returns (google.protobuf.Empty);
+}
+```
+
+---
+
+## google.protobuf.FieldMask
+
+**Import:** `google/protobuf/field_mask.proto`  
+**Go package:** `google.golang.org/protobuf/types/known/fieldmaskpb`
+
+`FieldMask` specifies a set of symbolic field paths. It is used in two main scenarios:
+
+1. **Projections** (read operations): ask the server to return only the listed fields
+2. **Partial updates** (write operations): tell the server which fields to modify, leaving the rest unchanged
+
+```protobuf
+// FieldMask represents a set of symbolic field paths, for example:
+//     paths: "f.a"
+//     paths: "f.b.d"
+message FieldMask {
+  repeated string paths = 1;
+}
+```
+
+### Path conventions
+
+Paths use dot-separated field names following the message hierarchy. In JSON encoding, paths use lowerCamelCase field names and multiple paths are comma-separated:
+
+```proto
+// In proto text format:
+mask {
+  paths: "user.display_name"
+  paths: "photo"
+}
+
+// In JSON:
+{ "mask": "user.displayName,photo" }
+```
+
+### Usage example
+
+```protobuf
+import "google/protobuf/field_mask.proto";
+
+message UpdateUserRequest {
+  User user = 1;
+  // Only fields listed in update_mask will be modified.
+  google.protobuf.FieldMask update_mask = 2;
+}
+```
+
+<Note>
+A `repeated` field is only allowed at the last position of a path string. Oneof type names (not field names) cannot be used in paths.
+</Note>
+
+<Info>
+Update methods following [AIP-134](https://google.aip.dev/134) must support the special value `*` to mean "full replace". Read methods following [AIP-157](https://google.aip.dev/157) should support `*` to mean "get all fields".
+</Info>
+
+---
+
+## google.protobuf Wrapper types
+
+**Import:** `google/protobuf/wrappers.proto`  
+**Go package:** `google.golang.org/protobuf/types/known/wrapperspb`
+
+The wrapper types wrap each scalar primitive in a single-field message. Because message fields always have explicit presence in proto3, this historically provided a way to distinguish between "field set to zero" and "field not set" for scalar types.
+
+<Warning>
+Wrapper types are **not recommended for new APIs**. In proto3 you can use the `optional` keyword on a scalar field to get explicit presence directly. Wrapper types remain supported for backward compatibility with existing APIs.
+</Warning>
+
+```protobuf
+// Wrapper message for `double`.
+message DoubleValue  { double value = 1; }
+
+// Wrapper message for `float`.
+message FloatValue   { float value = 1; }
+
+// Wrapper message for `int64`.
+message Int64Value   { int64 value = 1; }
+
+// Wrapper message for `uint64`.
+message UInt64Value  { uint64 value = 1; }
+
+// Wrapper message for `int32`.
+message Int32Value   { int32 value = 1; }
+
+// Wrapper message for `uint32`.
+message UInt32Value  { uint32 value = 1; }
+
+// Wrapper message for `bool`.
+message BoolValue    { bool value = 1; }
+
+// Wrapper message for `string`.
+message StringValue  { string value = 1; }
+
+// Wrapper message for `bytes`.
+message BytesValue   { bytes value = 1; }
+```
+
+### JSON encoding of wrappers
+
+| Wrapper type | JSON representation |
+|--------------|--------------------|
+| `DoubleValue` | JSON number |
+| `FloatValue` | JSON number |
+| `Int32Value` | JSON number |
+| `UInt32Value` | JSON number |
+| `Int64Value` | JSON string (to avoid JS precision loss) |
+| `UInt64Value` | JSON string |
+| `BoolValue` | `true` / `false` |
+| `StringValue` | JSON string |
+| `BytesValue` | Base64 JSON string |
+
+### Preferred alternative (proto3)
+
+Instead of using wrapper types in new schemas, mark the field `optional`:
+
+```protobuf
+message Config {
+  // Preferred in new APIs: optional scalar with explicit presence
+  optional int32 timeout_seconds = 1;
+
+  // Legacy pattern using wrapper type — avoid in new APIs
+  google.protobuf.Int32Value legacy_timeout = 2;
+}
+```

@@ -1,0 +1,190 @@
+---
+title: Objective-C Guide
+description: Use Protocol Buffers with Objective-C — CocoaPods installation, Xcode integration, code generation, and message usage.
+---
+
+The Objective-C Protocol Buffers runtime (version `5.35-dev`) requires Objective-C 2.0 and Xcode 13.3.1 or later. It targets 32-bit and 64-bit iOS and 64-bit macOS.
+
+## Installation
+
+<Steps>
+  <Step title="Add the pod to your Podfile">
+    ```ruby
+    pod 'Protobuf'
+    ```
+
+    Then install:
+
+    ```bash
+    pod install
+    ```
+  </Step>
+
+  <Step title="Install protoc">
+    Download the prebuilt `protoc` binary for macOS from the [releases page](https://github.com/protocolbuffers/protobuf/releases/latest) and add it to your `$PATH`, or install via Homebrew:
+
+    ```bash
+    brew install protobuf
+    ```
+  </Step>
+
+  <Step title="Generate Objective-C code">
+    Run `protoc` with `--objc_out`:
+
+    ```bash
+    protoc --objc_out=. addressbook.proto
+    ```
+
+    This generates `Addressbook.pbobjc.h` and `Addressbook.pbobjc.m`.
+  </Step>
+
+  <Step title="Add generated files to your Xcode project">
+    Add both the `.pbobjc.h` and `.pbobjc.m` files to your Xcode target.
+
+    <Warning>
+      The runtime library itself does **not** use ARC. If your target uses ARC, set the `-fno-objc-arc` compiler flag on all `.m` files from the runtime (not on your generated `.pbobjc.m` files).
+    </Warning>
+  </Step>
+</Steps>
+
+## Adding sources manually (without CocoaPods)
+
+If you are not using CocoaPods, add the runtime sources directly to your project. You have two options:
+
+**Option 1** — Single amalgamation file:
+- Add `objectivec/*.h`
+- Add `objectivec/google/protobuf/*.pbobjc.h`
+- Add `objectivec/GPBProtocolBuffers.m`
+
+**Option 2** — Individual source files:
+- Add `objectivec/*.h`
+- Add `objectivec/google/protobuf/*.pbobjc.h`
+- Add `objectivec/google/protobuf/*.pbobjc.m`
+- Add `objectivec/*.m` (except `GPBProtocolBuffers.m`)
+
+## Generating code
+
+The `--objc_out` flag is the primary way to generate Objective-C code:
+
+```bash
+protoc --objc_out=. addressbook.proto
+```
+
+### objc_class_prefix option
+
+Because Objective-C uses a flat global namespace, it is important to prefix all generated class names. Set this in your `.proto` file:
+
+```protobuf
+option objc_class_prefix = "AB";
+```
+
+This prefixes all generated classes: `ABPerson`, `ABAddressBook`, etc.
+
+### protoc options
+
+Pass additional options via `--objc_opt` as comma-delimited key=value pairs:
+
+```bash
+protoc --objc_out=. \
+  --objc_opt=generate_for_named_framework=MyFramework \
+  addressbook.proto
+```
+
+Available `--objc_opt` keys:
+
+| Key | Description |
+|-----|-------------|
+| `generate_for_named_framework` | Emits `#import <FRAMEWORK/file.pbobjc.h>` instead of plain `#import`. |
+| `named_framework_to_proto_path_mappings_path` | Path to a file mapping framework names to proto files. |
+| `runtime_import_prefix` | Prefix for `#import`s of runtime headers in generated files. |
+| `use_package_as_prefix` | Derive the ObjC class prefix from the proto package (`yes`/`no`). |
+| `package_to_prefix_mappings_path` | Path to a file mapping proto packages to ObjC class prefixes. |
+| `headers_use_forward_declarations` | Use forward declarations in headers (`yes`/`no`, default `yes`). |
+
+## Working with messages
+
+Generated message objects are mutable Objective-C objects. They follow standard Cocoa conventions:
+
+```objc
+#import "Addressbook.pbobjc.h"
+
+// Create a person
+ABPerson *person = [[ABPerson alloc] init];
+person.name = @"Jane Doe";
+person.id_p = 1234;
+person.email = @"jane@example.com";
+
+ABPerson_PhoneNumber *phone = [[ABPerson_PhoneNumber alloc] init];
+phone.number = @"+1-555-0100";
+phone.type = ABPerson_PhoneType_Mobile;
+[person.phonesArray addObject:phone];
+```
+
+### Serializing and parsing
+
+<CodeGroup>
+
+```objc serialize to NSData
+NSData *data = [person data];
+```
+
+```objc parse from NSData
+NSError *error = nil;
+ABPerson *parsed = [ABPerson parseFromData:data error:&error];
+if (error) {
+    NSLog(@"Parse error: %@", error);
+}
+```
+
+```objc write to file
+NSData *data = [addressBook data];
+[data writeToFile:@"/path/to/addressbook.bin" atomically:YES];
+```
+
+```objc read from file
+NSData *fileData = [NSData dataWithContentsOfFile:@"/path/to/addressbook.bin"];
+NSError *error = nil;
+ABAddressBook *addressBook = [ABAddressBook parseFromData:fileData error:&error];
+```
+
+</CodeGroup>
+
+## Autocreators
+
+The Objective-C runtime uses an *autocreator* pattern for message, array, and dictionary properties. Accessing an unset message property returns a temporary instance rather than `nil`. The instance is attached to its parent only when you mutate it:
+
+```objc
+// You do not need to check for nil or allocate subMessage/otherMessage manually.
+- (void)updateRecord:(MyMessage *)msg {
+    msg.subMessage.otherMessage.lastName = @"Smith";
+}
+```
+
+To check whether a message property was explicitly set, use the `has<FieldName>` property:
+
+```objc
+if (person.hasEmail) {
+    NSLog(@"Email: %@", person.email);
+}
+```
+
+## Swift interoperability
+
+The Objective-C generated classes and enums can be used directly from Swift code. No additional bridging is required beyond including the generated headers in your Swift bridging header or module map.
+
+## Key API reference
+
+<CardGroup cols={2}>
+  <Card title="GPBMessage" icon="cube">
+    Base class for all generated messages. Provides `data`, `parseFromData:error:`, `isEqual:`, `copy`, and `debugDescription`.
+  </Card>
+  <Card title="GPBCodedInputStream / GPBCodedOutputStream" icon="arrow-right-left">
+    Low-level streaming I/O. For most use cases, use `data` and `parseFromData:error:` on the message class instead.
+  </Card>
+  <Card title="Autocreators" icon="magic-wand">
+    NSString and NSData properties never return nil. Message, array, and dictionary properties return autocreated instances rather than nil. Use `has<FieldName>` to test explicit presence.
+  </Card>
+  <Card title="GPBArray / GPBDictionary" icon="list">
+    Typed array and dictionary containers for repeated fields and map fields. Provide standard collection methods and avoid boxing overhead for primitive types.
+  </Card>
+</CardGroup>

@@ -1,0 +1,167 @@
+---
+title: PHP Guide
+description: Use Protocol Buffers with PHP — Composer package, PECL C extension, code generation, and message usage.
+---
+
+The PHP Protocol Buffers runtime (version `5.35-dev`) is available as a pure PHP Composer package or as a native C extension via PECL. Both provide the same API and share generated code — you can switch implementations without regenerating.
+
+## Installation
+
+<Tabs>
+  <Tab title="Composer (pure PHP)">
+    <Steps>
+      <Step title="Add the package to your project">
+        ```bash
+        composer require google/protobuf
+        ```
+
+        Or add it manually to `composer.json`:
+
+        ```json
+        {
+          "require": {
+            "google/protobuf": "*"
+          }
+        }
+        ```
+      </Step>
+
+      <Step title="Install the bcmath extension">
+        The pure PHP implementation requires `bcmath` for 64-bit integer support:
+
+        ```bash
+        # Ubuntu/Debian
+        sudo apt-get install php-bcmath
+        ```
+      </Step>
+    </Steps>
+  </Tab>
+
+  <Tab title="PECL (C extension)">
+    <Steps>
+      <Step title="Install build prerequisites">
+        ```bash
+        # Ubuntu/Debian
+        sudo apt-get install -y php-pear php-dev libtool make gcc
+        ```
+      </Step>
+
+      <Step title="Install the extension from PECL">
+        ```bash
+        sudo pecl install protobuf
+        ```
+
+        Or install a specific version:
+
+        ```bash
+        sudo pecl install protobuf-5.28.2
+        ```
+      </Step>
+
+      <Step title="Enable the extension">
+        Add the following line to your `php.ini`:
+
+        ```ini
+        extension=protobuf.so
+        ```
+      </Step>
+    </Steps>
+  </Tab>
+</Tabs>
+
+## Generating code
+
+Install `protoc` and run it with `--php_out` to generate PHP classes:
+
+```bash
+protoc --php_out=out_dir addressbook.proto
+```
+
+For the `addressbook.proto` with `package tutorial`, this creates:
+- `GPBMetadata/Addressbook.php` — metadata for the descriptor pool
+- `Tutorial/Person.php`, `Tutorial/AddressBook.php`, etc. — message classes
+- `Tutorial/Person/PhoneNumber.php`, `Tutorial/Person/PhoneType.php` — nested types
+
+## Working with messages
+
+Require the generated files and use the classes directly:
+
+```php
+<?php
+require_once 'vendor/autoload.php';
+require_once 'GPBMetadata/Addressbook.php';
+require_once 'Tutorial/Person.php';
+require_once 'Tutorial/AddressBook.php';
+
+// Create a person
+$person = new Tutorial\Person();
+$person->setId(1234);
+$person->setName('Jane Doe');
+$person->setEmail('jane@example.com');
+
+// Add a phone number
+$phone = new Tutorial\Person\PhoneNumber();
+$phone->setNumber('+1-555-0100');
+$phone->setType(Tutorial\Person\PhoneType::MOBILE);
+$person->setPhones([$phone]);
+
+// Create an address book
+$addressBook = new Tutorial\AddressBook();
+$addressBook->setPeople([$person]);
+```
+
+### Serializing and parsing
+
+<CodeGroup>
+
+```php serialize to binary
+$serialized = $addressBook->serializeToString();
+file_put_contents('addressbook.bin', $serialized);
+```
+
+```php parse from binary
+$data = file_get_contents('addressbook.bin');
+$addressBook = new Tutorial\AddressBook();
+$addressBook->mergeFromString($data);
+```
+
+```php serialize to JSON
+$json = $addressBook->serializeToJsonString();
+```
+
+```php parse from JSON
+$addressBook = new Tutorial\AddressBook();
+$addressBook->mergeFromJsonString($json);
+```
+
+</CodeGroup>
+
+## Known limitations
+
+<Warning>
+  The PHP implementation has the following known limitations:
+
+  - No native support for well-known types.
+  - No support for proto2.
+  - No API for clear/copy operations on messages.
+  - No streaming encode/decode API.
+  - Map fields may not be garbage-collected if there is a cyclic reference.
+  - Message names cannot be `Empty`.
+</Warning>
+
+## Key API reference
+
+<CardGroup cols={2}>
+  <Card title="Message methods" icon="cube">
+    Every generated message class provides `serializeToString()`, `mergeFromString($data)`, `serializeToJsonString()`, and `mergeFromJsonString($json)`.
+  </Card>
+  <Card title="Field accessors" icon="arrow-right-left">
+    Fields are accessed via generated getters and setters: `getName()` / `setName($value)`. Repeated fields return a `RepeatedField` object; map fields return a `MapField`.
+  </Card>
+  <Card title="Enums" icon="tag">
+    Enum values are PHP integer constants. For example, `Tutorial\Person\PhoneType::MOBILE` is `0`.
+  </Card>
+  <Card title="Descriptor pool" icon="database">
+    Metadata files (under `GPBMetadata/`) register message descriptors with the global descriptor pool when required. Always require them before using the message classes.
+  </Card>
+</CardGroup>

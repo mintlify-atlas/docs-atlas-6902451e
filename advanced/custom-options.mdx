@@ -1,0 +1,298 @@
+---
+title: Custom options
+description: Learn how to extend descriptor.proto to add custom annotations to files, messages, fields, services, and methods, and how to read them at runtime.
+---
+
+Custom options let you attach user-defined metadata to any part of a `.proto` file — files, messages, fields, enums, enum values, services, and methods. They are implemented as extensions of the `*Options` messages defined in `descriptor.proto`.
+
+## How custom options work
+
+Every part of a `.proto` file has a corresponding options message (`FileOptions`, `MessageOptions`, `FieldOptions`, etc.) defined in `google/protobuf/descriptor.proto`. These messages reserve extension ranges specifically so you can add your own fields.
+
+To define a custom option, you extend the appropriate options message and then apply the extension in your `.proto` file using the `(option_name)` syntax.
+
+## Defining a custom option
+
+First, import `descriptor.proto` and extend the relevant options message:
+
+```protobuf
+syntax = "proto2";
+
+import "google/protobuf/descriptor.proto";
+
+package myproject;
+
+// A custom field option indicating the maximum allowed string length
+extend google.protobuf.FieldOptions {
+  optional uint32 max_length = 50001;
+}
+
+// A custom message option marking a message as sensitive
+extend google.protobuf.MessageOptions {
+  optional bool sensitive_data = 50002;
+}
+```
+
+Then apply the custom option in any `.proto` file that imports yours:
+
+```protobuf
+import "myproject/options.proto";
+
+message UserRecord {
+  option (myproject.sensitive_data) = true;
+
+  string username = 1;
+  string email    = 2 [(myproject.max_length) = 254];
+  string bio      = 3 [(myproject.max_length) = 500];
+}
+```
+
+## Option target types
+
+Custom options can be defined on any of the following option messages:
+
+<AccordionGroup>
+  <Accordion title="FileOptions">
+    Applies to the entire `.proto` file. Set with a top-level `option` statement.
+
+```protobuf
+extend google.protobuf.FileOptions {
+  optional uint64 file_opt1 = 7736974;
+}
+
+// Usage in a .proto file:
+option (myproject.file_opt1) = 9876543210;
+```
+  </Accordion>
+  <Accordion title="MessageOptions">
+    Applies to a message type. Set inside the message body.
+
+```protobuf
+extend google.protobuf.MessageOptions {
+  optional int32 message_opt1 = 7739036;
+}
+
+// Usage:
+message MyMessage {
+  option (myproject.message_opt1) = -56;
+}
+```
+  </Accordion>
+  <Accordion title="FieldOptions">
+    Applies to a field declaration. Set in the field's option list.
+
+```protobuf
+extend google.protobuf.FieldOptions {
+  optional fixed64 field_opt1   = 7740936;
+  optional int32   field_opt2   = 7753913 [default = 42];
+}
+
+// Usage:
+string field1 = 1 [(myproject.field_opt1) = 8765432109];
+```
+  </Accordion>
+  <Accordion title="EnumOptions and EnumValueOptions">
+    Applies to an enum type or individual enum values.
+
+```protobuf
+extend google.protobuf.EnumOptions {
+  optional sfixed32 enum_opt1 = 7753576;
+}
+
+extend google.protobuf.EnumValueOptions {
+  optional int32 enum_value_opt1 = 1560678;
+}
+
+// Usage:
+enum AnEnum {
+  option (myproject.enum_opt1) = -789;
+  VALUE_ONE = 1;
+  VALUE_TWO = 2 [(myproject.enum_value_opt1) = 123];
+}
+```
+  </Accordion>
+  <Accordion title="ServiceOptions and MethodOptions">
+    Applies to RPC service definitions or individual methods.
+
+```protobuf
+extend google.protobuf.ServiceOptions {
+  optional sint64 service_opt1 = 7887650;
+}
+
+extend google.protobuf.MethodOptions {
+  optional MethodOpt1 method_opt1 = 7890860;
+}
+
+// Usage:
+service MyService {
+  option (myproject.service_opt1) = -9876543210;
+
+  rpc DoWork(Request) returns (Response) {
+    option (myproject.method_opt1) = METHODOPT1_VAL2;
+  }
+}
+```
+  </Accordion>
+  <Accordion title="OneofOptions">
+    Applies to a `oneof` declaration.
+
+```protobuf
+extend google.protobuf.OneofOptions {
+  optional int32 oneof_opt1 = 7740111;
+}
+
+// Usage:
+message MyMessage {
+  oneof payload {
+    option (myproject.oneof_opt1) = -99;
+    int32 int_value   = 1;
+    string str_value  = 2;
+  }
+}
+```
+  </Accordion>
+</AccordionGroup>
+
+## Extension number registry
+
+Extension numbers for custom options must not conflict with other options in the same options message. The ranges are:
+
+| Range | Purpose |
+|---|---|
+| `50000`–`99999` | Private use: single application or organization, or experimental options. |
+| `1000`–`49999` | Reserved by Google for official protobuf extensions. |
+| Other ranges | Contact `protobuf-global-extension-registry@google.com` to reserve numbers for publicly-shared options. |
+
+For options that will only be used within a single codebase, choosing a number in the `50000`–`99999` range is sufficient. To avoid collisions when sharing options with other teams, use a sub-message to pack multiple options under a single extension number:
+
+```protobuf
+message MyFieldOptions {
+  optional uint32 max_length   = 1;
+  optional bool   is_sensitive = 2;
+  optional string doc_url      = 3;
+}
+
+extend google.protobuf.FieldOptions {
+  optional MyFieldOptions my_options = 50100;
+}
+
+// Usage:
+string email = 1 [(myproject.my_options) = {
+  max_length: 254
+  is_sensitive: true
+  doc_url: "https://example.com/fields/email"
+}];
+```
+
+## Complex option types
+
+Custom options can use any field type, including message types and repeated fields:
+
+```protobuf
+message Validation {
+  optional string pattern    = 1;
+  optional int32  min_length = 2;
+  optional int32  max_length = 3;
+  repeated string allowed_values = 4;
+}
+
+extend google.protobuf.FieldOptions {
+  optional Validation validation = 50200;
+}
+
+// Usage:
+string status = 1 [(myproject.validation) = {
+  allowed_values: "active"
+  allowed_values: "inactive"
+  allowed_values: "pending"
+}];
+```
+
+## Reading custom options at runtime
+
+At runtime, custom options are accessible through the reflection API. Each options message exposes its extensions through the descriptor system.
+
+<Tabs>
+  <Tab title="C++">
+```cpp
+#include "google/protobuf/descriptor.h"
+#include "myproject/options.pb.h"
+
+void InspectOptions(const google::protobuf::Descriptor* descriptor) {
+  const google::protobuf::MessageOptions& options = descriptor->options();
+
+  if (options.HasExtension(myproject::sensitive_data)) {
+    bool is_sensitive = options.GetExtension(myproject::sensitive_data);
+    std::cout << "sensitive_data = " << is_sensitive << std::endl;
+  }
+
+  for (int i = 0; i < descriptor->field_count(); ++i) {
+    const google::protobuf::FieldDescriptor* field = descriptor->field(i);
+    const google::protobuf::FieldOptions& field_opts = field->options();
+
+    if (field_opts.HasExtension(myproject::max_length)) {
+      uint32_t max = field_opts.GetExtension(myproject::max_length);
+      std::cout << field->name() << " max_length=" << max << std::endl;
+    }
+  }
+}
+```
+  </Tab>
+  <Tab title="Java">
+```java
+import com.google.protobuf.Descriptors.Descriptor;
+import com.google.protobuf.Descriptors.FieldDescriptor;
+import myproject.Options;
+
+void inspectOptions(Descriptor descriptor) {
+  if (descriptor.getOptions().hasExtension(Options.sensitiveData)) {
+    boolean isSensitive = descriptor.getOptions()
+        .getExtension(Options.sensitiveData);
+    System.out.println("sensitive_data = " + isSensitive);
+  }
+
+  for (FieldDescriptor field : descriptor.getFields()) {
+    if (field.getOptions().hasExtension(Options.maxLength)) {
+      int maxLen = field.getOptions().getExtension(Options.maxLength);
+      System.out.println(field.getName() + " max_length=" + maxLen);
+    }
+  }
+}
+```
+  </Tab>
+  <Tab title="Python">
+```python
+from myproject import options_pb2
+
+def inspect_options(descriptor):
+    opts = descriptor.GetOptions()
+    if opts.HasExtension(options_pb2.sensitive_data):
+        print(f"sensitive_data = {opts.Extensions[options_pb2.sensitive_data]}")
+
+    for field in descriptor.fields:
+        field_opts = field.GetOptions()
+        if field_opts.HasExtension(options_pb2.max_length):
+            max_len = field_opts.Extensions[options_pb2.max_length]
+            print(f"{field.name} max_length={max_len}")
+```
+  </Tab>
+</Tabs>
+
+<Warning>
+Custom options defined in `syntax = "proto2"` files are the standard approach. In `syntax = "proto3"` and editions files, extensions are allowed only on the `*Options` messages from `descriptor.proto`. You cannot add extensions to your own proto3 messages.
+</Warning>
+
+## Feature support lifecycle
+
+Custom options can be annotated with `feature_support` to control their lifetime in relation to editions. This lets you mark an option as deprecated or removed for a specific edition:
+
+```protobuf
+extend google.protobuf.MessageOptions {
+  optional bool legacy_flag = 50300 [feature_support = {
+    edition_deprecated: EDITION_2023
+    deprecation_warning: "Use the new_style_option instead."
+  }];
+}
+```
+
+When a file using this option upgrades to edition 2023 or later, the compiler emits the deprecation warning.

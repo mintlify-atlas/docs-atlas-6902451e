@@ -1,0 +1,92 @@
+---
+title: "Version support policy"
+description: "Current versions, versioning scheme, support lifecycle, and compatibility guarantees for Protocol Buffers."
+---
+
+## Current versions
+
+The table below reflects the versions tracked in `version.json` at the repository root.
+
+| Component     | Version    |
+|---------------|------------|
+| `protoc`      | 35-dev     |
+| C++           | 7.35-dev   |
+| C#            | 3.35-dev   |
+| Java          | 4.35-dev   |
+| JavaScript    | 3.35-dev   |
+| Objective-C   | 5.35-dev   |
+| PHP           | 5.35-dev   |
+| Python        | 7.35-dev   |
+| Ruby          | 4.35-dev   |
+| Rust          | 4.35-dev   |
+
+<Note>
+  Versions ending in `-dev` are pre-release snapshots from the `main` branch. Stable release versions do not carry the `-dev` suffix.
+</Note>
+
+## Versioning scheme
+
+### protoc (the compiler)
+
+`protoc` releases use a single incrementing major version number (e.g., `v27`, `v28`). There is no minor or patch component for the compiler itself.
+
+### Language runtimes
+
+Each language runtime is versioned independently using a `MAJOR.MINOR` scheme tied to the protoc release:
+
+- The **minor** version tracks the protoc release (e.g., runtime `x.27` was released alongside `protoc` v27).
+- The **major** version is incremented when a breaking change is required for that specific language.
+
+This means different language runtimes may have different major versions even when released at the same time.
+
+## Support lifecycle
+
+### LTS vs regular releases
+
+Some protoc releases are designated as **Long-Term Support (LTS)** releases. The `"lts"` field in `version.json` indicates whether the current development line will produce an LTS release.
+
+- **LTS releases** receive bug fixes and security patches for an extended period after the initial release date.
+- **Regular releases** are supported until the next regular or LTS release is available.
+
+<Info>
+  Check the [release page on GitHub](https://github.com/protocolbuffers/protobuf/releases) to identify which published versions carry the LTS designation.
+</Info>
+
+### Branch policy
+
+- Most changes (features, bug fixes) target the `main` branch and appear in the next major/minor release.
+- Bug fixes intended for a **patch release** (e.g., `v27.1`) must first land on `main`, then be cherry-picked to the relevant release branch (e.g., `27.x`).
+
+## Compatibility guarantees
+
+### Binary wire format
+
+The binary wire format is **permanently stable**. A message serialized by any version of protobuf can be deserialized by any other version, past or future. Changes to the wire format are never accepted — any incompatible encoding would require an entirely new format specification.
+
+### Text format
+
+The text format is a debugging aid and is **not** guaranteed to be stable across versions. Do not use it for persistent storage or inter-process communication.
+
+### Source (API) compatibility
+
+- **Public APIs** are kept stable across minor and patch releases within a major version.
+- **Breaking API changes** are avoided wherever possible. When a breaking change is unavoidable, it is first implemented in Google's internal codebase and then propagated to the open-source repository. The major version of the affected language runtime is incremented.
+- Changes to **existing APIs are almost never accepted** from external contributors. Stability and backwards compatibility are the top priority.
+
+### Proto2 and proto3 compatibility
+
+Messages encoded with proto2 and proto3 use the same binary wire format. A proto2 message can be read by a proto3 parser and vice versa, as long as field numbers and types are compatible. The key behavioral differences (required fields, default values, unknown field handling) are a language-level concern and do not affect the encoded bytes.
+
+### Protobuf Editions
+
+Protobuf Editions (the successor to proto2/proto3 syntax) maintains full wire-format compatibility. Editions introduce feature flags that govern language-level behavior without changing the encoded binary representation.
+
+## Security policy
+
+To report a security vulnerability in Protocol Buffers, use Google's official bug reporting channel:
+
+**[https://bughunters.google.com/report](https://bughunters.google.com/report)**
+
+<Warning>
+  Do not open a public GitHub issue for security vulnerabilities. Use the link above to report them confidentially through Google's Bug Hunters program.
+</Warning>

@@ -1,0 +1,159 @@
+---
+title: "Contributing guide"
+description: "How to contribute to Protocol Buffers: filing issues, setting up your development environment, running tests, and submitting pull requests."
+---
+
+Protocol Buffers welcomes contributions. This guide explains the process and expectations.
+
+## What we accept
+
+<AccordionGroup>
+  <Accordion title="Bug fixes">
+    Bug fixes accompanied by unit tests that demonstrate the problem are the most welcome contribution. Bug reports without patches are also appreciated.
+
+    Bug fixes without tests are generally not accepted.
+  </Accordion>
+
+  <Accordion title="New APIs and features">
+    New APIs and features may be accepted if they:
+
+    - Include adequate test coverage and documentation
+    - Do not compromise backward compatibility
+    - Clear a high bar of usefulness — features that are fine in isolation are often rejected if they do not have enough impact to justify ongoing maintenance cost
+
+    <Tip>File an issue and get agreement from maintainers on the value of a new feature before writing any code.</Tip>
+  </Accordion>
+
+  <Accordion title="Performance optimizations">
+    Performance improvements may be accepted if they:
+
+    - Include convincing benchmarks that demonstrate the improvement
+    - Do not significantly increase code complexity
+  </Accordion>
+
+  <Accordion title="What we do not accept">
+    - **API changes**: Changes to existing APIs are almost never accepted. Stability and backward compatibility are paramount.
+    - **Wire or text format changes**: Changes to the binary wire format or text format are never accepted. Any incompatible change would need to be a completely new format.
+  </Accordion>
+</AccordionGroup>
+
+## Before you start
+
+### Contributor License Agreement
+
+All contributions must be accompanied by a signed Contributor License Agreement (CLA). You retain copyright over your contribution — the CLA simply grants Google permission to use and redistribute it as part of the project.
+
+<Steps>
+  <Step title="Determine which CLA applies">
+    - **Individual**: If you are writing original code that you personally own, sign the [individual CLA](https://cla.developers.google.com/about/google-individual?csw=1).
+    - **Corporate**: If you are contributing on behalf of an employer, your company must sign the [corporate CLA](https://cla.developers.google.com/about/google-corporate?csw=1).
+  </Step>
+  <Step title="Sign the CLA">
+    Complete the signing process at [cla.developers.google.com](https://cla.developers.google.com). The CLA bot on GitHub will confirm your status when you open a pull request.
+  </Step>
+</Steps>
+
+### Coding style
+
+This project follows [Google's Coding Style Guides](https://github.com/google/styleguide). Review the relevant guide for the language you are changing and make sure your code is style-conforming before submitting.
+
+## Filing issues
+
+- **Bug reports**: Open an issue on [GitHub](https://github.com/protocolbuffers/protobuf/issues) with a clear description, a minimal reproduction case, and the protobuf version you are using.
+- **Feature requests**: File an issue and describe the use case. Get explicit support from a maintainer before starting implementation work on behavioral or API changes.
+- **Security vulnerabilities**: Do **not** open a public issue. Report security concerns via [Google's Bug Hunters program](https://bughunters.google.com/report).
+
+## Development setup
+
+The protobuf repository supports multiple build systems. Choose the one appropriate for the language you are working on.
+
+<Tabs>
+  <Tab title="Bazel">
+    Bazel is the primary build system for the protobuf project.
+
+    ```bash
+    # Install Bazel from https://github.com/bazelbuild/bazel/releases
+    # then build all targets
+    bazel build //...
+    ```
+  </Tab>
+  <Tab title="CMake">
+    CMake is supported for C++ development.
+
+    ```bash
+    mkdir build && cd build
+    cmake ..
+    make -j$(nproc)
+    ```
+  </Tab>
+  <Tab title="Language-specific">
+    Most language runtimes have their own setup instructions:
+
+    - **Python**: `pip install -e python/`
+    - **Java**: Use the Maven or Gradle build files in `java/`
+    - **Ruby**: `cd ruby && bundle install && rake`
+    - **PHP**: `cd php && composer install`
+  </Tab>
+</Tabs>
+
+## Running tests
+
+All tests must pass before a pull request can be merged.
+
+```bash
+# Run all tests with Bazel
+bazel test //...
+
+# Run C++ tests only
+bazel test //src/...
+
+# Run Python tests only
+bazel test //python/...
+```
+
+<Warning>
+  Run tests locally before creating your pull request to catch breakages early. The CI system will also run tests, but catching failures before review saves time for you and the reviewer.
+</Warning>
+
+## Pull request process
+
+<Steps>
+  <Step title="Target the right branch">
+    Most pull requests should target the `main` branch. The change will be included in the next major or minor release.
+
+    For a bug fix that needs to land in a **patch release** (e.g., `v27.1`), first merge to `main`, then create a separate cherry-pick PR against the release branch (e.g., `27.x`).
+  </Step>
+  <Step title="Keep the PR focused">
+    Create small PRs that address a single concern. If a PR fixes multiple unrelated things, split it into separate pull requests.
+
+    Do not include unrelated style or formatting changes — submit those in a separate PR.
+  </Step>
+  <Step title="Write a good description">
+    Provide a clear description of what changed and why. Link to the relevant GitHub issue if one exists. The description becomes part of the release notes when the `release notes: yes` label is applied.
+  </Step>
+  <Step title="Respond to review feedback">
+    A protobuf team member will be assigned to review your PR. Minor cleanups may be merged quickly; larger changes will go through multiple review rounds.
+
+    - Expect a first response within 7 days.
+    - Respond to reviewer comments within a reasonable time. PRs with no activity for 2 weeks or longer may be closed.
+    - Maintain a clean commit history. Use `git rebase -i upstream/main` to curate commits and incorporate upstream changes.
+  </Step>
+  <Step title="Pass CI">
+    All CI checks must be green before merging. The reviewer will help diagnose failures that appear unrelated to your change.
+  </Step>
+</Steps>
+
+## Reviewer guidelines
+
+If you are reviewing a pull request:
+
+- Confirm that all tests are passing before approving.
+- Apply the **`release notes: yes`** label if the change should appear in the release notes (new features, bug fixes).
+- Apply the **`release notes: no`** label for changes that should not appear (refactoring, test updates, internal propagations).
+- Apply the appropriate **language label** (e.g., `C++`, `Java`, `Python`) to help triage and routing.
+
+## Notes for Googlers
+
+If you are a Google employee, the preferred path is to create an internal CL, have it reviewed and submitted internally, and let the code propagation process deliver it to GitHub.
+
+For **documentation changes**, submit pull requests to the [protocolbuffers/protocolbuffers.github.io](https://github.com/protocolbuffers/protocolbuffers.github.io) repository. Changes are replicated internally and published within a couple of weeks.

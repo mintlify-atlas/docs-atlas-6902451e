@@ -1,0 +1,135 @@
+---
+title: Introduction to Protocol Buffers
+description: Protocol Buffers (protobuf) is Google's language-neutral, platform-neutral, extensible mechanism for serializing structured data.
+---
+
+Protocol Buffers (protobuf) are Google's language-neutral, platform-neutral, extensible mechanism for serializing structured data. You define how you want your data to be structured once, then you can use generated source code to easily write and read your structured data to and from a variety of data streams using a variety of languages.
+
+## Why Protocol Buffers?
+
+When you need to serialize structured data, you have several options. Protocol Buffers offer distinct advantages over alternatives like JSON and XML:
+
+| Feature | Protocol Buffers | JSON | XML |
+|---|---|---|---|
+| Format | Binary | Text | Text |
+| Schema | Required (.proto) | Optional | Optional (XSD) |
+| Type safety | Strong | Weak | Moderate |
+| Size | Smaller | Larger | Largest |
+| Parse speed | Faster | Slower | Slowest |
+| Human readable | No | Yes | Yes |
+
+The binary encoding makes protobuf messages significantly smaller on the wire and faster to parse than their text-based counterparts. A typical protobuf message is 3 to 10 times smaller than the equivalent XML, and 20 to 100 times faster to encode and decode.
+
+## Key use cases
+
+**Remote procedure calls (RPC)**
+Protobuf is the standard serialization format for gRPC, Google's open-source RPC framework. Service definitions and messages are described in `.proto` files, and `protoc` generates both client and server stubs in your language of choice.
+
+**Data storage**
+Protobuf's compact binary format makes it well-suited for storing structured records. Because the schema is separate from the data, you can evolve your schema over time while preserving backward and forward compatibility.
+
+**Configuration and data exchange**
+Any application that needs to exchange structured data between services — including microservice architectures, mobile clients, and embedded systems — benefits from protobuf's small payload size and strong typing.
+
+## How it works
+
+The workflow for using Protocol Buffers follows three steps:
+
+<Steps>
+  <Step title="Define your schema">
+    Write a `.proto` file that describes your data structures as *messages*. Each message is a small logical record containing a series of typed fields.
+
+    ```protobuf addressbook.proto
+    syntax = "proto3";
+    package tutorial;
+
+    import "google/protobuf/timestamp.proto";
+
+    message Person {
+      string name = 1;
+      int32 id = 2;
+      string email = 3;
+
+      enum PhoneType {
+        MOBILE = 0;
+        HOME = 1;
+        WORK = 2;
+      }
+
+      message PhoneNumber {
+        string number = 1;
+        PhoneType type = 2;
+      }
+
+      repeated PhoneNumber phones = 4;
+      google.protobuf.Timestamp last_updated = 5;
+    }
+
+    message AddressBook {
+      repeated Person people = 1;
+    }
+    ```
+  </Step>
+
+  <Step title="Compile with protoc">
+    Run the `protoc` compiler against your `.proto` file, specifying your target language. The compiler generates source files you include directly in your project.
+
+    ```bash
+    protoc --python_out=. addressbook.proto
+    protoc --java_out=. addressbook.proto
+    ```
+  </Step>
+
+  <Step title="Use the generated code">
+    Import the generated classes and use them to create, serialize, and parse messages in your application code. The API is idiomatic for each supported language.
+
+    ```python
+    import addressbook_pb2
+
+    address_book = addressbook_pb2.AddressBook()
+    person = address_book.people.add()
+    person.id = 1234
+    person.name = "John Doe"
+    person.email = "jdoe@example.com"
+
+    # Serialize to binary
+    serialized = address_book.SerializeToString()
+
+    # Parse from binary
+    address_book2 = addressbook_pb2.AddressBook()
+    address_book2.ParseFromString(serialized)
+    ```
+  </Step>
+</Steps>
+
+## Supported languages
+
+Protobuf ships with runtime libraries and code generators for a wide range of languages:
+
+| Language | Source |
+|---|---|
+| C++ (includes protoc) | `src/` |
+| Java | `java/` |
+| Python | `python/` |
+| C# | `csharp/` |
+| Ruby | `ruby/` |
+| PHP | `php/` |
+| Objective-C | `objectivec/` |
+| Go | github.com/protocolbuffers/protobuf-go |
+| Dart | github.com/dart-lang/protobuf |
+| JavaScript | github.com/protocolbuffers/protobuf-javascript |
+
+<Note>
+All officially supported language runtimes use the same binary wire format, so a message serialized by a Java program can be parsed by a Python program without any additional configuration.
+</Note>
+
+## Next steps
+
+<CardGroup cols={2}>
+  <Card title="Quickstart" icon="rocket" href="/quickstart">
+    Define your first `.proto` file, compile it, and use the generated code in Python and Java.
+  </Card>
+  <Card title="Installation" icon="download" href="/installation">
+    Install the `protoc` compiler and the runtime library for your language.
+  </Card>
+</CardGroup>

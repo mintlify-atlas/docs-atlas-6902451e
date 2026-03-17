@@ -1,0 +1,292 @@
+---
+title: Java Guide
+description: Use Protocol Buffers with Java — Maven/Gradle setup, code generation, the builder pattern, and serialization.
+---
+
+The Java Protocol Buffers runtime (version `4.35-dev`) provides generated classes that follow Java idioms and integrate with standard Java I/O. An Android-optimized Lite runtime is also available.
+
+## Installation
+
+<Steps>
+  <Step title="Add the runtime dependency">
+    <Tabs>
+      <Tab title="Maven">
+        ```xml
+        <dependency>
+          <groupId>com.google.protobuf</groupId>
+          <artifactId>protobuf-java</artifactId>
+          <version>4.28.2</version>
+        </dependency>
+        ```
+      </Tab>
+      <Tab title="Gradle">
+        ```groovy
+        implementation 'com.google.protobuf:protobuf-java:4.28.2'
+        ```
+      </Tab>
+    </Tabs>
+
+    <Note>
+      Ensure the runtime version is equal to or newer than the version of `protoc` you use to generate code.
+    </Note>
+  </Step>
+
+  <Step title="(Optional) Add protobuf-java-util">
+    For JSON formatting, reflection utilities, and well-known type support:
+
+    <Tabs>
+      <Tab title="Maven">
+        ```xml
+        <dependency>
+          <groupId>com.google.protobuf</groupId>
+          <artifactId>protobuf-java-util</artifactId>
+          <version>4.28.2</version>
+        </dependency>
+        ```
+      </Tab>
+      <Tab title="Gradle">
+        ```groovy
+        implementation 'com.google.protobuf:protobuf-java-util:4.28.2'
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Install protoc">
+    Download the prebuilt `protoc` binary for your platform from the [releases page](https://github.com/protocolbuffers/protobuf/releases/latest), or build it from source using Bazel.
+  </Step>
+</Steps>
+
+## Generating code
+
+Run `protoc` with `--java_out` to generate Java source files:
+
+```bash
+protoc --java_out=${OUTPUT_DIR} path/to/your/file.proto
+```
+
+For the addressbook example:
+
+```bash
+protoc --java_out=src/main/java addressbook.proto
+```
+
+With `option java_multiple_files = true` set in the `.proto` file, each message type is generated in its own `.java` file. Without it, all types are nested inside a single outer class named by `java_outer_classname`.
+
+### Bazel
+
+Bazel has native support for Java protobuf generation:
+
+```python
+java_proto_library(
+    name = "addressbook_java_proto",
+    deps = [":addressbook_proto"],
+)
+```
+
+## Working with messages
+
+### Builder pattern
+
+All generated Java message classes are immutable. To create or modify a message, use its `Builder`:
+
+```java
+import com.example.tutorial.protos.Person;
+import com.example.tutorial.protos.Person.PhoneType;
+
+Person person = Person.newBuilder()
+    .setId(1234)
+    .setName("Jane Doe")
+    .setEmail("jane@example.com")
+    .addPhones(
+        Person.PhoneNumber.newBuilder()
+            .setNumber("+1-555-0100")
+            .setType(PhoneType.MOBILE)
+            .build())
+    .build();
+```
+
+### Serializing and parsing
+
+<CodeGroup>
+
+```java serialize to byte array
+byte[] bytes = person.toByteArray();
+```
+
+```java parse from byte array
+Person parsed = Person.parseFrom(bytes);
+```
+
+```java serialize to output stream
+import java.io.FileOutputStream;
+
+try (FileOutputStream output = new FileOutputStream("person.bin")) {
+    person.writeTo(output);
+}
+```
+
+```java parse from input stream
+import java.io.FileInputStream;
+
+try (FileInputStream input = new FileInputStream("person.bin")) {
+    Person parsed = Person.parseFrom(input);
+}
+```
+
+</CodeGroup>
+
+## Full example: AddPerson.java
+
+This example reads an address book from disk, prompts for a new person, and writes it back:
+
+```java
+import com.example.tutorial.protos.AddressBook;
+import com.example.tutorial.protos.Person;
+import com.google.protobuf.util.Timestamps;
+import java.io.BufferedReader;
+import java.io.FileInputStream;
+import java.io.FileNotFoundException;
+import java.io.FileOutputStream;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.io.PrintStream;
+
+class AddPerson {
+  static Person PromptForAddress(BufferedReader stdin,
+                                 PrintStream stdout) throws IOException {
+    Person.Builder person = Person.newBuilder();
+
+    stdout.print("Enter person ID: ");
+    person.setId(Integer.valueOf(stdin.readLine()));
+
+    stdout.print("Enter name: ");
+    person.setName(stdin.readLine());
+
+    stdout.print("Enter email address (blank for none): ");
+    String email = stdin.readLine();
+    if (email.length() > 0) {
+      person.setEmail(email);
+    }
+
+    while (true) {
+      stdout.print("Enter a phone number (or leave blank to finish): ");
+      String number = stdin.readLine();
+      if (number.length() == 0) break;
+
+      Person.PhoneNumber.Builder phoneNumber =
+        Person.PhoneNumber.newBuilder().setNumber(number);
+
+      stdout.print("Is this a mobile, home, or work phone? ");
+      String type = stdin.readLine();
+      if (type.equals("mobile")) {
+        phoneNumber.setType(Person.PhoneType.MOBILE);
+      } else if (type.equals("home")) {
+        phoneNumber.setType(Person.PhoneType.HOME);
+      } else if (type.equals("work")) {
+        phoneNumber.setType(Person.PhoneType.WORK);
+      } else {
+        stdout.println("Unknown phone type.  Using default.");
+      }
+
+      person.addPhones(phoneNumber);
+      person.setLastUpdated(Timestamps.now());
+    }
+
+    return person.build();
+  }
+
+  public static void main(String[] args) throws Exception {
+    if (args.length != 1) {
+      System.err.println("Usage:  AddPerson ADDRESS_BOOK_FILE");
+      System.exit(-1);
+    }
+
+    AddressBook.Builder addressBook = AddressBook.newBuilder();
+
+    try {
+      FileInputStream input = new FileInputStream(args[0]);
+      try {
+        addressBook.mergeFrom(input);
+      } finally {
+        try { input.close(); } catch (Throwable ignore) {}
+      }
+    } catch (FileNotFoundException e) {
+      System.out.println(args[0] + ": File not found.  Creating a new file.");
+    }
+
+    addressBook.addPeople(
+      PromptForAddress(new BufferedReader(new InputStreamReader(System.in)),
+                       System.out));
+
+    FileOutputStream output = new FileOutputStream(args[0]);
+    try {
+      addressBook.build().writeTo(output);
+    } finally {
+      output.close();
+    }
+  }
+}
+```
+
+## Lite runtime for Android
+
+For Android apps, the Lite runtime significantly reduces code size and works better with ProGuard/R8 because it avoids Java reflection.
+
+<Tabs>
+  <Tab title="Maven">
+    ```xml
+    <dependency>
+      <groupId>com.google.protobuf</groupId>
+      <artifactId>protobuf-javalite</artifactId>
+      <version>4.28.2</version>
+    </dependency>
+    ```
+  </Tab>
+  <Tab title="Gradle">
+    ```groovy
+    implementation 'com.google.protobuf:protobuf-javalite:4.28.2'
+    ```
+  </Tab>
+</Tabs>
+
+Generate Lite-compatible code by adding `optimize_for = LITE_RUNTIME` to your `.proto` file, or use the `java_lite_proto_library` Bazel rule.
+
+<Note>
+  The Lite runtime API is not yet stable and may change in minor version releases. Avoid using it in library code that you do not control end-to-end.
+</Note>
+
+## Kotlin support
+
+Kotlin protobuf support provides idiomatic Kotlin APIs built on top of the Java runtime. Add both dependencies and generate both Java and Kotlin output:
+
+```bash
+protoc --java_out=${OUTPUT_DIR} --kotlin_out=${OUTPUT_DIR} path/to/file.proto
+```
+
+```xml
+<dependency>
+  <groupId>com.google.protobuf</groupId>
+  <artifactId>protobuf-kotlin</artifactId>
+  <version>4.28.2</version>
+</dependency>
+```
+
+## Key API reference
+
+<CardGroup cols={2}>
+  <Card title="Message" icon="cube">
+    All generated classes extend `com.google.protobuf.Message`. Use `.newBuilder()` to get a mutable `Builder`, then call `.build()` to get an immutable message.
+  </Card>
+  <Card title="Serialization" icon="arrow-right-left">
+    `toByteArray()` / `parseFrom(byte[])` for byte arrays.
+    `writeTo(OutputStream)` / `parseFrom(InputStream)` for streams.
+    `mergeFrom(InputStream)` to merge into an existing builder.
+  </Card>
+  <Card title="JSON" icon="braces">
+    `JsonFormat.printer().print(message)` and `JsonFormat.parser().merge(json, builder)` from `protobuf-java-util`.
+  </Card>
+  <Card title="Compatibility" icon="shield-check">
+    Minor version releases are backwards-compatible in both binary and source form. APIs annotated `@ExperimentalApi` may change at any time.
+  </Card>
+</CardGroup>

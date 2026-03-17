@@ -1,0 +1,308 @@
+---
+title: C++ Guide
+description: Use Protocol Buffers with C++ — installation, code generation, serialization, and arena allocation.
+---
+
+The C++ Protocol Buffers runtime (version `7.35-dev`) provides generated classes for each message type, along with utilities for serialization, parsing, and arena allocation.
+
+## Installation
+
+<Steps>
+  <Step title="Install build tools">
+    The C++ runtime requires Bazel (or CMake), a C++ compiler, and Abseil.
+
+    <Tabs>
+      <Tab title="Ubuntu/Debian">
+        ```bash
+        sudo apt-get install g++ git bazel
+        ```
+      </Tab>
+      <Tab title="macOS (Homebrew)">
+        ```bash
+        brew install bazel
+        sudo xcode-select --install
+        ```
+      </Tab>
+      <Tab title="Windows (vcpkg)">
+        ```powershell
+        vcpkg install protobuf protobuf:x64-windows
+        ```
+      </Tab>
+    </Tabs>
+  </Step>
+
+  <Step title="Build protoc and the runtime">
+    Clone the repository and build using Bazel:
+
+    ```bash
+    git clone https://github.com/protocolbuffers/protobuf.git
+    cd protobuf
+    git submodule update --init --recursive
+    bazel build :protoc :protobuf
+    ```
+
+    Copy the compiler to your path:
+
+    ```bash
+    cp bazel-bin/protoc /usr/local/bin
+    ```
+  </Step>
+
+  <Step title="Link the runtime in your project">
+    Add a dependency on the `protobuf` Bazel target from the protobuf repository, or link against `libprotobuf` when using CMake. See [cmake/README.md](https://github.com/protocolbuffers/protobuf/blob/main/cmake/README.md) for CMake setup.
+  </Step>
+</Steps>
+
+<Warning>
+  Due to ABI instability in C++, linking against different versions of `libprotobuf` in the same binary will cause crashes. Ensure the version of `protoc` used to generate code matches the runtime library version you link against.
+</Warning>
+
+## Generating code
+
+Given an `addressbook.proto` file, run `protoc` with `--cpp_out` to generate a `.pb.h` and `.pb.cc` file:
+
+```bash
+protoc --cpp_out=. addressbook.proto
+```
+
+This produces `addressbook.pb.h` and `addressbook.pb.cc`. Include both files in your build.
+
+```bash
+# Example Bazel build rule
+cc_proto_library(
+    name = "addressbook_cc_proto",
+    deps = [":addressbook_proto"],
+)
+```
+
+## Working with messages
+
+Include the generated header and the main protobuf header in your source file:
+
+```cpp
+#include <google/protobuf/message.h>
+#include "addressbook.pb.h"
+```
+
+### Version check
+
+Call `GOOGLE_PROTOBUF_VERIFY_VERSION` at the top of `main()` to detect version mismatches between headers and the linked library:
+
+```cpp
+int main(int argc, char* argv[]) {
+  GOOGLE_PROTOBUF_VERIFY_VERSION;
+  // ...
+}
+```
+
+### Creating and mutating messages
+
+Generated message classes have setter and getter methods for each field. Repeated fields and nested messages have dedicated accessors:
+
+```cpp
+#include <ctime>
+#include <google/protobuf/util/time_util.h>
+#include "addressbook.pb.h"
+
+using google::protobuf::util::TimeUtil;
+
+void PromptForAddress(tutorial::Person* person) {
+  person->set_id(42);
+  // mutable_name() returns a pointer to the underlying string
+  *person->mutable_name() = "Jane Doe";
+  person->set_email("jane@example.com");
+
+  tutorial::Person::PhoneNumber* phone_number = person->add_phones();
+  phone_number->set_number("+1-555-0100");
+  phone_number->set_type(tutorial::Person::MOBILE);
+
+  *person->mutable_last_updated() =
+      TimeUtil::SecondsToTimestamp(time(nullptr));
+}
+```
+
+### Serializing and parsing
+
+<CodeGroup>
+
+```cpp serialize to file
+#include <fstream>
+
+tutorial::AddressBook address_book;
+// ... populate address_book ...
+
+std::fstream output("addressbook.bin",
+                    std::ios::out | std::ios::trunc | std::ios::binary);
+if (!address_book.SerializeToOstream(&output)) {
+  std::cerr << "Failed to write address book." << std::endl;
+}
+```
+
+```cpp parse from file
+#include <fstream>
+
+tutorial::AddressBook address_book;
+
+std::fstream input("addressbook.bin", std::ios::in | std::ios::binary);
+if (!address_book.ParseFromIstream(&input)) {
+  std::cerr << "Failed to parse address book." << std::endl;
+}
+```
+
+```cpp serialize to string
+std::string serialized;
+if (!address_book.SerializeToString(&serialized)) {
+  std::cerr << "Failed to serialize." << std::endl;
+}
+```
+
+```cpp parse from string
+tutorial::AddressBook address_book;
+if (!address_book.ParseFromString(serialized)) {
+  std::cerr << "Failed to parse." << std::endl;
+}
+```
+
+</CodeGroup>
+
+## Full example: add_person.cc
+
+This example reads an address book from disk, adds a person, and writes it back:
+
+```cpp
+#include <ctime>
+#include <fstream>
+#include <google/protobuf/util/time_util.h>
+#include <iostream>
+#include <string>
+
+#include "addressbook.pb.h"
+
+using namespace std;
+using google::protobuf::util::TimeUtil;
+
+void PromptForAddress(tutorial::Person* person) {
+  cout << "Enter person ID number: ";
+  int id;
+  cin >> id;
+  person->set_id(id);
+  cin.ignore(256, '\n');
+
+  cout << "Enter name: ";
+  getline(cin, *person->mutable_name());
+
+  cout << "Enter email address (blank for none): ";
+  string email;
+  getline(cin, email);
+  if (!email.empty()) {
+    person->set_email(email);
+  }
+
+  while (true) {
+    cout << "Enter a phone number (or leave blank to finish): ";
+    string number;
+    getline(cin, number);
+    if (number.empty()) break;
+
+    tutorial::Person::PhoneNumber* phone_number = person->add_phones();
+    phone_number->set_number(number);
+
+    cout << "Is this a mobile, home, or work phone? ";
+    string type;
+    getline(cin, type);
+    if (type == "mobile") {
+      phone_number->set_type(tutorial::Person::MOBILE);
+    } else if (type == "home") {
+      phone_number->set_type(tutorial::Person::HOME);
+    } else if (type == "work") {
+      phone_number->set_type(tutorial::Person::WORK);
+    } else {
+      cout << "Unknown phone type.  Using default." << endl;
+    }
+  }
+  *person->mutable_last_updated() = TimeUtil::SecondsToTimestamp(time(NULL));
+}
+
+int main(int argc, char* argv[]) {
+  GOOGLE_PROTOBUF_VERIFY_VERSION;
+
+  if (argc != 2) {
+    cerr << "Usage:  " << argv[0] << " ADDRESS_BOOK_FILE" << endl;
+    return -1;
+  }
+
+  tutorial::AddressBook address_book;
+
+  {
+    fstream input(argv[1], ios::in | ios::binary);
+    if (!input) {
+      cout << argv[1] << ": File not found.  Creating a new file." << endl;
+    } else if (!address_book.ParseFromIstream(&input)) {
+      cerr << "Failed to parse address book." << endl;
+      return -1;
+    }
+  }
+
+  PromptForAddress(address_book.add_people());
+
+  {
+    fstream output(argv[1], ios::out | ios::trunc | ios::binary);
+    if (!address_book.SerializeToOstream(&output)) {
+      cerr << "Failed to write address book." << endl;
+      return -1;
+    }
+  }
+
+  google::protobuf::ShutdownProtobufLibrary();
+  return 0;
+}
+```
+
+## Arena allocation
+
+Arena allocation improves performance by reducing heap fragmentation. All messages allocated on an arena are freed when the arena is destroyed:
+
+```cpp
+#include <google/protobuf/arena.h>
+#include "addressbook.pb.h"
+
+google::protobuf::Arena arena;
+tutorial::AddressBook* address_book =
+    google::protobuf::Arena::CreateMessage<tutorial::AddressBook>(&arena);
+
+tutorial::Person* person = address_book->add_people();
+person->set_name("Arena User");
+person->set_id(1);
+
+// No need to delete address_book — freed when arena goes out of scope
+```
+
+<Tip>
+  Arena allocation is most beneficial for workloads that create and destroy large numbers of messages. Use `arena.SpaceUsed()` and `arena.SpaceAllocated()` to profile memory usage.
+</Tip>
+
+## Key API reference
+
+<CardGroup cols={2}>
+  <Card title="Message base class" icon="cube">
+    `google::protobuf::Message` — base class for all generated messages. Provides `SerializeToString`, `ParseFromString`, `ByteSizeLong`, `DebugString`, and `MergeFrom`.
+  </Card>
+  <Card title="Serialization" icon="arrow-right-left">
+    `SerializeToString` / `ParseFromString` — byte string I/O.
+    `SerializeToOstream` / `ParseFromIstream` — stream I/O.
+    `SerializeToArray` / `ParseFromArray` — raw buffer I/O.
+  </Card>
+  <Card title="Arena" icon="memory">
+    `google::protobuf::Arena` — arena allocator. Use `Arena::CreateMessage<T>(&arena)` to allocate messages on the arena.
+  </Card>
+  <Card title="Utilities" icon="wrench">
+    `google::protobuf::util::TimeUtil` — helpers for `Timestamp` and `Duration` well-known types.
+    `google::protobuf::ShutdownProtobufLibrary()` — release global objects on exit.
+  </Card>
+</CardGroup>
+
+## Binary compatibility
+
+<Warning>
+  The C++ runtime does not guarantee ABI compatibility across versions. If you update `libprotobuf`, recompile all code that depends on it. Consider using `linkstatic = True` in Bazel `cc_binary` rules to avoid runtime version mismatches.
+</Warning>

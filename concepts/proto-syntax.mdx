@@ -1,0 +1,264 @@
+---
+title: Proto syntax overview
+description: A tour of .proto file structure — syntax declarations, packages, imports, messages, enums, services, and options.
+---
+
+A `.proto` file is the source of truth for your data schema. It defines messages, enumerations, and services that the Protocol Buffer compiler (`protoc`) translates into generated code for your target language.
+
+This page walks through every top-level construct you will encounter in a `.proto` file.
+
+## Syntax declaration
+
+Every `.proto` file should begin with a `syntax` statement that declares which language version is in use. If the statement is omitted, the compiler defaults to `proto2`.
+
+```protobuf
+syntax = "proto3";
+```
+
+The `syntax` statement must appear before any other non-comment, non-whitespace content in the file.
+
+<Note>
+This documentation covers `proto3`. `proto2` is still supported but new schemas should use `proto3` unless you have a specific requirement for `proto2` semantics.
+</Note>
+
+## Package declaration
+
+The `package` statement prevents name collisions between message types defined in different projects. Package names are dot-separated identifiers that form a namespace.
+
+```protobuf
+package tutorial;
+```
+
+In generated code, the package maps to language-specific namespaces:
+
+- **C++**: nested namespaces matching each component (e.g., `tutorial::`)
+- **Java**: used as the Java package unless overridden by `java_package`
+- **Go**: the last component of the package becomes the Go package name unless overridden by `go_package`
+- **Python**: package names have no effect on the generated module structure
+
+The real-world `addressbook.proto` example uses:
+
+```protobuf
+syntax = "proto3";
+package tutorial;
+
+import "google/protobuf/timestamp.proto";
+```
+
+## Import statements
+
+Use `import` to bring in definitions from other `.proto` files.
+
+```protobuf
+import "google/protobuf/timestamp.proto";
+```
+
+`protoc` resolves imports relative to the directories specified with `-I` / `--proto_path` flags. If no `-I` flag is given, the current directory is used.
+
+### Public imports
+
+A `public` import re-exports all definitions to any file that imports the current file:
+
+```protobuf
+import public "other.proto";
+```
+
+This is useful when you want to move a type to a new file while keeping backward compatibility with existing importers.
+
+### Weak imports
+
+A `weak` import signals that the dependency is optional — if the imported file is not found at compile time, the import is silently ignored. This feature is intended for internal migration use and should not be used in new schemas.
+
+## Message definitions
+
+A `message` is the primary container for structured data. Each field inside a message has a type, a name, and a unique field number.
+
+```protobuf
+message Person {
+  string name = 1;
+  int32 id = 2;  // Unique ID number for this person.
+  string email = 3;
+
+  repeated PhoneNumber phones = 4;
+
+  google.protobuf.Timestamp last_updated = 5;
+}
+```
+
+Field numbers must be unique within the message and are used in the binary encoding to identify fields — they must never be changed once data is in production.
+
+### Nested messages
+
+Messages can be defined inside other messages. Nested definitions are scoped to the enclosing message:
+
+```protobuf
+message Person {
+  message PhoneNumber {
+    string number = 1;
+    PhoneType type = 2;
+  }
+
+  repeated PhoneNumber phones = 4;
+}
+```
+
+### Reserved fields
+
+When you remove a field, reserve its number (and optionally its name) to prevent future definitions from accidentally reusing it:
+
+```protobuf
+message Foo {
+  reserved 2, 15, 9 to 11;
+  reserved "foo", "bar";
+}
+```
+
+## Enum definitions
+
+Enumerations define a fixed set of named integer constants. The first value in an enum must be zero.
+
+```protobuf
+message Person {
+  enum PhoneType {
+    MOBILE = 0;
+    HOME = 1;
+    WORK = 2;
+  }
+}
+```
+
+Standalone enums (not nested inside a message) are also valid and can be referenced across messages within the same file or via imports.
+
+## Service definitions
+
+Services declare RPC (Remote Procedure Call) interfaces for use with gRPC. Each `rpc` method specifies its request and response message types.
+
+```protobuf
+service SearchService {
+  rpc Search(SearchRequest) returns (SearchResponse);
+}
+```
+
+### Streaming RPCs
+
+gRPC supports four RPC types:
+
+<Tabs>
+  <Tab title="Unary">
+    ```protobuf
+    // Single request, single response
+    rpc GetUser(GetUserRequest) returns (User);
+    ```
+  </Tab>
+  <Tab title="Server streaming">
+    ```protobuf
+    // Single request, stream of responses
+    rpc ListUsers(ListUsersRequest) returns (stream User);
+    ```
+  </Tab>
+  <Tab title="Client streaming">
+    ```protobuf
+    // Stream of requests, single response
+    rpc CreateUsers(stream CreateUserRequest) returns (CreateUsersResponse);
+    ```
+  </Tab>
+  <Tab title="Bidirectional streaming">
+    ```protobuf
+    // Stream of requests, stream of responses
+    rpc Chat(stream ChatMessage) returns (stream ChatMessage);
+    ```
+  </Tab>
+</Tabs>
+
+## Options
+
+Options customise compiler behaviour and generated code without changing the semantics of the proto definition itself. They are specified using the `option` keyword.
+
+### File-level options
+
+File-level options apply to the whole file and must appear at the top level (outside any message or service block).
+
+```protobuf
+option java_package = "com.example.tutorial.protos";
+option java_outer_classname = "AddressBookProtos";
+option java_multiple_files = true;
+option go_package = "github.com/protocolbuffers/protobuf/examples/go/tutorialpb";
+option csharp_namespace = "Google.Protobuf.Examples.AddressBook";
+```
+
+| Option | Effect |
+|--------|--------|
+| `java_package` | Java package for generated classes |
+| `java_outer_classname` | Outer class name wrapping all generated Java classes |
+| `java_multiple_files` | Generate one `.java` file per top-level type |
+| `go_package` | Go import path for the generated package |
+| `csharp_namespace` | C# namespace for generated classes |
+| `objc_class_prefix` | Prefix for Objective-C class names |
+| `optimize_for` | `SPEED`, `CODE_SIZE`, or `LITE_RUNTIME` |
+| `cc_enable_arenas` | Enable arena allocation for C++ |
+
+### Message-level options
+
+Message-level options appear inside a message body:
+
+```protobuf
+message MyMessage {
+  option deprecated = true;
+  string name = 1;
+}
+```
+
+### Field-level options
+
+Field-level options appear after the field definition:
+
+```protobuf
+message MyMessage {
+  string old_field = 1 [deprecated = true];
+  repeated int32 samples = 2 [packed = true];
+}
+```
+
+The `packed` option (default `true` in proto3 for numeric types) controls whether repeated scalar fields use the packed encoding format.
+
+## Complete example
+
+The following is the complete `addressbook.proto` from the official protobuf examples repository, showing all the constructs described on this page working together:
+
+```protobuf
+syntax = "proto3";
+package tutorial;
+
+import "google/protobuf/timestamp.proto";
+
+option java_multiple_files = true;
+option java_package = "com.example.tutorial.protos";
+option java_outer_classname = "AddressBookProtos";
+option csharp_namespace = "Google.Protobuf.Examples.AddressBook";
+option go_package = "github.com/protocolbuffers/protobuf/examples/go/tutorialpb";
+
+message Person {
+  string name = 1;
+  int32 id = 2;
+  string email = 3;
+
+  enum PhoneType {
+    MOBILE = 0;
+    HOME = 1;
+    WORK = 2;
+  }
+
+  message PhoneNumber {
+    string number = 1;
+    PhoneType type = 2;
+  }
+
+  repeated PhoneNumber phones = 4;
+
+  google.protobuf.Timestamp last_updated = 5;
+}
+
+message AddressBook {
+  repeated Person people = 1;
+}
+```
